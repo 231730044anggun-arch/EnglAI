@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+// Helper script to allow 'php artisan serve' in this native PHP project.
+$command = $argv[1] ?? '';
+
+if ($command === 'serve') {
+    $port = '8000';
+    foreach ($argv as $arg) {
+        if (str_starts_with($arg, '--port=')) {
+            $port = substr($arg, 7);
+        }
+    }
+    echo "http://localhost:{$port}\n";
+    // Redirect stderr to NUL to hide PHP server logs on Windows
+    passthru("php -S localhost:{$port} 2>NUL");
+} else {
+    echo "EnglAI adalah proyek Native PHP (bukan Laravel).\n";
+    echo "Kami membuatkan file helper ini agar perintah 'php artisan serve' bisa Anda gunakan untuk menjalankan server.\n";
+    echo "Perintah yang didukung:\n";
+    echo "  php artisan serve\n";
+}
