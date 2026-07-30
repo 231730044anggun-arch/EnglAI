@@ -18,7 +18,7 @@ function gemini_json(string $prompt): array
         fail('API key Gemini belum dikonfigurasi.', 500);
     }
 
-    $model = 'gemini-flash-latest';
+    $model = getenv('GEMINI_MODEL') ?: 'gemini-3.5-flash';
 
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
         . rawurlencode($model)
