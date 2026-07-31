@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../config/koneksi.php';
+apply_security_headers();
 
 try {
     $rows = db()->query('SELECT id, original_name, file_type, is_selected, uploaded_at FROM rpps ORDER BY uploaded_at DESC')->fetchAll();
@@ -13,5 +14,6 @@ try {
     }
     json_response(['success' => true, 'selected_id' => $selected, 'rpps' => $rows]);
 } catch (Throwable $e) {
+    app_log('error', 'RPP API list failed', ['request_id' => request_id(), 'exception' => get_class($e)]);
     json_response(['success' => false, 'message' => 'Daftar RPP belum tersedia.'], 500);
 }

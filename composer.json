@@ -6,5 +6,15 @@
     "php": ">=8.1",
     "phpoffice/phpword": "^1.3",
     "smalot/pdfparser": "^2.12"
+  },
+  "autoload": {
+    "psr-4": {
+      "EnglAI\\": "src/"
+    }
+  },
+  "scripts": {
+    "lint": "php tests/lint.php",
+    "test": "php tests/run.php",
+    "migrate": "php scripts/migrate.php"
   }
 }

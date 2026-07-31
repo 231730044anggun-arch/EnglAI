@@ -2,3 +2,10 @@
 /uploads/*
 !/uploads/.htaccess
 .env
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/sessions/*
+!/storage/sessions/.gitkeep
+/.phpunit.cache/

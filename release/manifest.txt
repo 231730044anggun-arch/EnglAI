@@ -1,0 +1,3 @@
+include: application PHP source, Composer metadata, vendor dependencies, assets, migrations, scripts, documentation, empty runtime directories
+exclude: .env, .git, backups, database dumps, runtime logs, runtime sessions, runtime cache, uploaded/private RPP, test uploads, debug files
+version: 1.0.0

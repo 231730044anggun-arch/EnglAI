@@ -1,0 +1,15 @@
+.git/
+.agents/
+.env
+vendor/
+uploads/*
+storage/logs/*
+storage/sessions/*
+storage/cache/*
+database/englai.sql
+phase1_write_files.ps1
+fix_mahasiswa_import.ps1
+*.zip
+*.log
+database_englai_before_phase0.sql
+docs/reference/
