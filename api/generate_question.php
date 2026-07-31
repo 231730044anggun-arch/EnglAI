@@ -18,72 +18,109 @@ function gemini_json(string $prompt): array
         fail('API key Gemini belum dikonfigurasi.', 500);
     }
 
-    $model = getenv('GEMINI_MODEL') ?: 'gemini-3.5-flash';
+    $primaryModel = getenv('GEMINI_MODEL') ?: 'gemini-3.5-flash-lite';
 
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-        . rawurlencode($model)
-        . ':generateContent';
+    // Fallback models to try if primary model hits quota/overload
+    $fallbackModels = [
+        'gemini-3.5-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-flash',
+    ];
 
-    $payload = json_encode([
-        'contents' => [
-            [
-                'parts' => [
+    // Build ordered list: primary first, then fallbacks (skip duplicates)
+    $models = [$primaryModel];
+    foreach ($fallbackModels as $fb) {
+        if (!in_array($fb, $models, true)) {
+            $models[] = $fb;
+        }
+    }
+
+    $maxRetries = 2; // retries per model
+    $lastError = '';
+
+    foreach ($models as $model) {
+        for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+                . rawurlencode($model)
+                . ':generateContent';
+
+            $payload = json_encode([
+                'contents' => [
                     [
-                        'text' => $prompt
+                        'parts' => [
+                            [
+                                'text' => $prompt
+                            ]
+                        ]
                     ]
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.8,
+                    'responseMimeType' => 'application/json'
                 ]
-            ]
-        ],
-        'generationConfig' => [
-            'temperature' => 0.8,
-            'responseMimeType' => 'application/json'
-        ]
-    ], JSON_UNESCAPED_UNICODE);
+            ], JSON_UNESCAPED_UNICODE);
 
-    $curl = curl_init($url);
+            $curl = curl_init($url);
 
-    curl_setopt_array($curl, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-    'X-goog-api-key: ' . $key
-        ],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 45
-    ]);
+            curl_setopt_array($curl, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'X-goog-api-key: ' . $key
+                ],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 45
+            ]);
 
-    $raw = curl_exec($curl);
-    $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $error = curl_error($curl);
+            $raw = curl_exec($curl);
+            $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            $error = curl_error($curl);
 
-    curl_close($curl);
+            curl_close($curl);
 
-    if ($raw === false) {
-        fail('Gagal menghubungi Gemini: ' . $error, 502);
+            if ($raw === false) {
+                $lastError = 'Gagal menghubungi Gemini: ' . $error;
+                continue;
+            }
+
+            // Retry on 429 (quota) or 503 (overloaded)
+            if ($status === 429 || $status === 503) {
+                $lastError = "Model $model: HTTP $status (quota/overload)";
+                if ($attempt < $maxRetries) {
+                    sleep(2 * ($attempt + 1)); // wait 2s, 4s
+                }
+                continue;
+            }
+
+            // For 429/503 after all retries, break to try next model
+            if ($status < 200 || $status >= 300) {
+                $lastError = "Model $model: HTTP $status. $raw";
+                break; // try next model
+            }
+
+            $response = json_decode($raw, true);
+
+            if (isset($response['error'])) {
+                $lastError = $response['error']['message'] ?? 'Gemini Error';
+                break; // try next model
+            }
+
+            $text = $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
+            $data = json_decode($text, true);
+
+            if (!is_array($data)) {
+                fail('Respons Gemini tidak valid.', 502);
+            }
+
+            return $data;
+        }
     }
 
-    if ($status < 200 || $status >= 300) {
-        fail('Gemini mengembalikan HTTP ' . $status . '. ' . $raw, 502);
-    }
-
-    $response = json_decode($raw, true);
-
-    if (isset($response['error'])) {
-        fail($response['error']['message'] ?? 'Gemini Error', 502);
-    }
-
-    $text = $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
-
-    $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
-
-    $data = json_decode($text, true);
-
-    if (!is_array($data)) {
-        fail('Respons Gemini tidak valid.', 502);
-    }
-
-    return $data;
+    fail('Semua model Gemini gagal. Terakhir: ' . $lastError, 502);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
