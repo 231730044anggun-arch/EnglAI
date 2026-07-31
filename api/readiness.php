@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);require_once __DIR__.'/../config/koneksi.php';
+try{$db=db()->query('SELECT 1')->fetchColumn()===1;$migrations=(int)db()->query("SELECT COUNT(*) FROM migrations WHERE migration='202607310008_englai_1_0_accounts_settings.php'")->fetchColumn()>0;$storage=is_writable(__DIR__.'/../storage');$ready=$db&&$migrations&&$storage;json_response(['success'=>$ready,'status'=>$ready?'ready':'not_ready','checks'=>['database'=>$db,'migrations'=>$migrations,'storage'=>$storage],'version'=>'1.0.0'],$ready?200:503);}catch(Throwable){json_response(['success'=>false,'status'=>'not_ready'],503);}

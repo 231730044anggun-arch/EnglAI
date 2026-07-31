@@ -1,0 +1,1 @@
+(function(){"use strict";document.addEventListener("DOMContentLoaded",()=>document.querySelectorAll("[data-progress]").forEach(bar=>{const value=Math.max(0,Math.min(100,Number(bar.dataset.progress)||0));requestAnimationFrame(()=>bar.style.width=value+"%")}))})();

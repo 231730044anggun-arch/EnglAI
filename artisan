@@ -12,9 +12,9 @@ if ($command === 'serve') {
             $port = substr($arg, 7);
         }
     }
-    echo "http://localhost:{$port}\n";
+    echo "http://127.0.0.1:{$port}\n";
     // Redirect stderr to NUL to hide PHP server logs on Windows
-    passthru("php -S localhost:{$port} 2>NUL");
+    passthru("php -S 127.0.0.1:{$port} router.php 2>NUL");
 } else {
     echo "EnglAI adalah proyek Native PHP (bukan Laravel).\n";
     echo "Kami membuatkan file helper ini agar perintah 'php artisan serve' bisa Anda gunakan untuk menjalankan server.\n";

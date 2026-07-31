@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);require_once __DIR__.'/../config/koneksi.php';require_once __DIR__.'/../vendor/autoload.php';use EnglAI\Mvp\StudentSession;
+if(session_status()!==PHP_SESSION_ACTIVE)session_start();if(($_SESSION['user_role']??'')!=='student'){header('Location: /auth/student_login.php');exit;}$q=db()->prepare("SELECT * FROM classroom_members WHERE id=? AND user_id=? AND membership_status='active'");$q->execute([(int)($_GET['member_id']??0),(int)$_SESSION['user_id']]);$m=$q->fetch();if(!$m){http_response_code(403);exit('Access denied.');}StudentSession::establish((int)$m['id'],(int)$m['classroom_id'],(string)$m['session_token']);header('Location: /student/dashboard.php');exit;
