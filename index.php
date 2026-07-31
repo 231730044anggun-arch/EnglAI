@@ -228,7 +228,23 @@ html,body{height:100%;overflow:hidden;font-family:'Poppins',sans-serif;backgroun
   .teams-grid{grid-template-columns:1fr}
   .unit-grid{grid-template-columns:1fr 1fr}
   .setup-inner{padding:20px 14px 80px}
+  .modal-content{padding:20px;max-height:90vh}
 }
+/* ─── MODAL ──────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(7,7,26,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .3s ease;padding:20px}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-content{width:100%;max-width:520px;position:relative;padding:32px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.6),0 0 30px rgba(124,58,237,.25);border:1px solid rgba(255,255,255,.15);border-radius:24px;text-align:left}
+.modal-close{position:absolute;top:16px;right:20px;background:none;border:none;color:var(--muted);font-size:1.8rem;cursor:pointer;transition:color .2s;line-height:1}
+.modal-close:hover{color:var(--txt)}
+.modal-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:12px}
+.modal-icon{font-size:1.8rem}
+.modal-title{font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:700;background:linear-gradient(135deg,#a78bfa,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.modal-body{display:flex;flex-direction:column;gap:18px}
+.modal-section h3{font-size:.95rem;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+.modal-section ul{list-style:none;padding-left:0}
+.modal-section li{font-size:.85rem;color:rgba(255,255,255,.85);margin-bottom:5px;position:relative;padding-left:14px;line-height:1.4}
+.modal-section li::before{content:"•";position:absolute;left:0;color:var(--gold)}
+.modal-footer{margin-top:24px;display:flex;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -236,6 +252,44 @@ html,body{height:100%;overflow:hidden;font-family:'Poppins',sans-serif;backgroun
 <div id="stars"></div>
 <button id="mbtn" onclick="toggleMusic()" title="Toggle Music">🎵</button>
 <div id="cnf"></div>
+
+<!-- Modal Cara Bermain -->
+<div class="modal-overlay" id="howToPlayModal" onclick="if(event.target === this) closeHowToPlay()">
+  <div class="modal-content gc sl">
+    <button class="modal-close" onclick="closeHowToPlay()" title="Close">&times;</button>
+    <div class="modal-header">
+      <span class="modal-icon">📖</span>
+      <h2 class="modal-title">CARA BERMAIN EnglAI</h2>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <h3>🎮 Quiz Mode</h3>
+        <ul>
+          <li>Kelompok bergantian menjawab pertanyaan pilihan ganda.</li>
+          <li>Soal dibuat secara otomatis oleh AI Gemini.</li>
+        </ul>
+      </div>
+      <div class="modal-section">
+        <h3>🗣️ Speaking Mode</h3>
+        <ul>
+          <li>Kelompok bergantian mengucapkan kalimat dari Unit 1-3.</li>
+          <li>Gunakan mic untuk merekam suara (Speech Recognition + AI pronunciation scoring).</li>
+          <li>Akurasi pengucapan dinilai langsung oleh AI (skor 0-100).</li>
+        </ul>
+      </div>
+      <div class="modal-section">
+        <h3>🏆 Poin & Penentuan Juara</h3>
+        <ul>
+          <li>Poin untuk setiap tantangan dihitung dengan cara yang sama.</li>
+          <li>Juara ditentukan berdasarkan akumulasi total skor tertinggi di akhir permainan!</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" onclick="closeHowToPlay()">Mengerti</button>
+    </div>
+  </div>
+</div>
 <div id="fbk">
   <div class="fbk-box" id="fbkBox">
     <div class="fbk-ico" id="fbkIco"></div>
@@ -468,7 +522,10 @@ function togUnit(u){
   else{G.units.push(u);el.classList.add('sel')}
 }
 function howToPlay(){
-  alert(`📖 CARA BERMAIN EnglAI\n\n🎮 QUIZ MODE\n• Kelompok bergantian menjawab pertanyaan pilihan ganda\n• AI Gemini buat soal otomatis\n\n🗣️ SPEAKING MODE\n• Kelompok bergantian mengucapkan kalimat dari Unit 1-3\n• Mic aktif → Speech Recognition + AI scoring pronunciation\n• Dinilai langsung oleh AI (akurasinya 0-100)\n\n🏆 Poin dihitung sama, juara ditentukan total skor!`);
+  document.getElementById('howToPlayModal').classList.add('open');
+}
+function closeHowToPlay(){
+  document.getElementById('howToPlayModal').classList.remove('open');
 }
 
 /* ═══════════════════════════════════════
