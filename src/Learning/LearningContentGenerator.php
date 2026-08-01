@@ -11,7 +11,6 @@ final class LearningContentGenerator
     public function generate(int $classroomId,string $skill,string $level): array
     {
         $skill=strtolower(trim($skill));if(!in_array($skill,self::SKILLS,true))throw new \InvalidArgumentException('Skill tidak valid.');$level=Level::validate($level);
-        if($skill==='reading')return (new ReadingBankGenerator($this->pdo))->generate($classroomId,$level);
         $stmt=$this->pdo->prepare('SELECT * FROM classroom_lesson_plans WHERE classroom_id=? AND is_active=1 ORDER BY version DESC LIMIT 1');$stmt->execute([$classroomId]);$plan=$stmt->fetch();if(!$plan)throw new \RuntimeException('RPP classroom belum tersedia.');
         $source='fallback';try{$items=$this->fromAi($skill,$level,(string)$plan['extracted_text']);$source='ai';}catch(\Throwable $e){$items=$this->fallback($skill,$level,(string)$plan['extracted_text']);app_log('warning','Learning generation fallback used',['classroom_id'=>$classroomId,'skill'=>$skill,'level'=>$level,'reason'=>get_class($e)]);}
         $modules=0;$created=0;$duplicates=0;$this->pdo->beginTransaction();

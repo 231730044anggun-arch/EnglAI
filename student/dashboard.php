@@ -375,7 +375,7 @@ $history = array_slice($history, 0, 10);
                             <p class="muted" style="margin: 4px 0 0 0; font-size: 0.9rem;"><?= htmlspecialchars($skillDescriptions[$recSkill]) ?></p>
                             <p style="margin: 8px 0 0 0; font-size: 0.85rem; opacity: 0.9;"><?= $recReason ?></p>
                         </div>
-                        <a class="button gold" href="<?= $recSkill === 'reading' ? '/student/self_learning.php' : '/student/skill.php?skill=' . $recSkill ?>" style="margin: 0;">Mulai Latihan →</a>
+                        <a class="button gold" href="/student/skill.php?skill=<?= $recSkill ?>" style="margin: 0;">Mulai Latihan →</a>
                     </div>
                 </div>
             <?php endif; ?>
@@ -403,7 +403,7 @@ $history = array_slice($history, 0, 10);
                         <h3><?= ucfirst($skillName) ?></h3>
                         <p class="muted"><?= count($availableLevels) ?> level tersedia · <?= number_format((float)($skillProgress['average_score'] ?? 0), 0) ?>% average</p>
                         <?php if ($availableLevels): ?>
-                            <a class="button primary wide" href="<?= $skillName === 'reading' ? '/student/self_learning.php' : '/student/skill.php?skill=' . $skillName ?>">Continue Learning</a>
+                            <a class="button primary wide" href="/student/skill.php?skill=<?= $skillName ?>">Continue Learning</a>
                         <?php endif; ?>
                     </article>
                 <?php endforeach; ?>

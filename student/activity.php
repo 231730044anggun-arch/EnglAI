@@ -8,7 +8,7 @@ $pdo=db();$member=StudentSession::requireMember($pdo);$classroomId=(int)$member[
 if (isset($_GET['repeat']) && (int)$_GET['repeat'] === 1) {
     $skill = strtolower((string)($_GET['skill'] ?? ''));
     $level = Level::validate((string)($_GET['level'] ?? ''));
-    if (in_array($skill, ['listening', 'speaking', 'writing'], true)) {
+    if (in_array($skill, ['reading', 'listening', 'speaking', 'writing'], true)) {
         $pdo->beginTransaction();
         try {
             // Delete assessment results linked to the attempts of this student/classroom/skill/level
@@ -48,8 +48,7 @@ if (isset($_GET['repeat']) && (int)$_GET['repeat'] === 1) {
     }
 }
 
-if(strtolower((string)($_GET['skill']??''))==='reading'){header('Location: /student/self_learning.php?level='.rawurlencode((string)($_GET['level']??'intermediate')));exit;}
-if($attemptId>0){$legacy=$pdo->prepare('SELECT l.skill FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.id=? AND a.member_id=?');$legacy->execute([$attemptId,$memberId]);if($legacy->fetchColumn()==='reading'){header('Location: /student/self_learning.php');exit;}}
+
 if($attemptId<1){$skill=strtolower((string)($_GET['skill']??''));$level=Level::validate((string)($_GET['level']??''));if(!in_array($skill,['reading','listening','speaking','writing'],true)){http_response_code(404);exit;}
   $stmt=$pdo->prepare("SELECT l.* FROM learning_activities l WHERE l.classroom_id=? AND l.skill=? AND l.level=? AND l.status='ready' AND l.id NOT IN(SELECT activity_id FROM learning_attempts WHERE member_id=? AND status='completed') ORDER BY RAND() LIMIT 1");$stmt->execute([$classroomId,$skill,$level,$memberId]);$activity=$stmt->fetch();
   if(!$activity){
