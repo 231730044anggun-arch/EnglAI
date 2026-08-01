@@ -5,7 +5,7 @@ namespace EnglAI\Quiz;
 use EnglAI\AI\GeminiProvider;
 
 /**
- * Generates live quiz items using the Gemini AI API,
+ * Generates live quiz items in batch using the Gemini AI API,
  * based on the classroom's active lesson plan (RPP) content.
  */
 final class GeminiLiveQuizGenerator
@@ -15,31 +15,44 @@ final class GeminiLiveQuizGenerator
     public function __construct(private readonly GeminiProvider $gemini) {}
 
     /**
-     * Generate one quiz item for the given skill/level using Gemini.
-     * Returns null if AI generation fails (caller should use fallback).
+     * Generate a batch of quiz items for the given skill/level using Gemini.
+     * Returns null or empty array if AI generation fails.
      *
-     * @return array<string,mixed>|null
+     * @return list<array<string,mixed>>|null
      */
-    public function generate(string $skill, string $level, int $n, string $rppExcerpt): ?array
+    public function generateBatch(string $skill, string $level, int $startN, int $count, string $rppExcerpt): ?array
     {
-        $prompt = $this->buildPrompt($skill, $level, $n, $rppExcerpt);
+        $prompt = $this->buildBatchPrompt($skill, $level, $startN, $count, $rppExcerpt);
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             try {
-                $raw  = $this->gemini->generate($prompt);
-                $item = $this->parse($skill, $level, $n, $raw);
-                if ($item !== null) {
-                    return $item;
+                $raw = $this->gemini->generate($prompt);
+                $items = array_is_list($raw) ? $raw : ($raw['items'] ?? $raw['questions'] ?? []);
+                if (!is_array($items) || count($items) === 0) {
+                    continue;
+                }
+                
+                $parsed = [];
+                foreach ($items as $idx => $rawItem) {
+                    if (!is_array($rawItem)) continue;
+                    $itemNum = $startN + $idx;
+                    $parsedItem = $this->parseItem($skill, $level, $itemNum, $rawItem);
+                    if ($parsedItem !== null) {
+                        $parsed[] = $parsedItem;
+                    }
+                }
+                if (count($parsed) > 0) {
+                    return $parsed;
                 }
             } catch (\Throwable) {
-                // try again or fall through to null
+                // try again or fall through
             }
         }
 
         return null;
     }
 
-    private function buildPrompt(string $skill, string $level, int $n, string $rppExcerpt): string
+    private function buildBatchPrompt(string $skill, string $level, int $startN, int $count, string $rppExcerpt): string
     {
         $difficulty = match ($level) {
             'basic'    => 'easy (suitable for beginners)',
@@ -47,88 +60,87 @@ final class GeminiLiveQuizGenerator
             default    => 'medium (intermediate level)',
         };
 
-        // Send enough context but not too much
-        $excerpt = mb_substr($rppExcerpt, 0, 2000);
+        $excerpt = mb_substr($rppExcerpt, 0, 3000);
 
         return match ($skill) {
-            'reading'   => $this->readingPrompt($n, $difficulty, $excerpt),
-            'listening' => $this->listeningPrompt($n, $difficulty, $excerpt),
-            'speaking'  => $this->speakingPrompt($n, $difficulty, $excerpt),
-            default     => $this->writingPrompt($n, $difficulty, $excerpt),
+            'reading'   => $this->readingPrompt($startN, $count, $difficulty, $excerpt),
+            'listening' => $this->listeningPrompt($startN, $count, $difficulty, $excerpt),
+            'speaking'  => $this->speakingPrompt($startN, $count, $difficulty, $excerpt),
+            default     => $this->writingPrompt($startN, $count, $difficulty, $excerpt),
         };
     }
 
-    private function readingPrompt(int $n, string $difficulty, string $excerpt): string
+    private function readingPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         return <<<PROMPT
 You are an English quiz generator for Indonesian junior/senior high school students.
-Study the lesson plan (RPP) excerpt carefully, then create ONE reading comprehension multiple-choice question.
+Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} reading comprehension multiple-choice questions.
 
 LESSON PLAN EXCERPT:
 {$excerpt}
 
 STRICT REQUIREMENTS:
-- Question number: {$n}, difficulty: {$difficulty}
-- Write a SHORT passage (3–5 sentences) about a SPECIFIC topic, animal, person, or event mentioned in the RPP
+- Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
+- For each item, write a SHORT passage (3–5 sentences) about a SPECIFIC topic, animal, person, or event mentioned in the RPP.
 - The question must ask about a SPECIFIC DETAIL from the passage:
   * A name (of a bird, person, character, place)
   * A fact (what the animal eats, where it lives, what it looks like)
   * A grammar point from the lesson (e.g. passive voice usage)
   * A vocabulary meaning
-  * An inference about a character's action or feeling
-- DO NOT ask generic questions like "What is the main idea?" or "What is the best summary?"
-- The correct answer key MUST rotate: for question 1 use A, 2 use B, 3 use C, 4 use D, then repeat
-- For question {$n}, use answer key: {$this->rotateAnswer($n)}
-- All 4 options must be plausible but clearly only one is correct
-- Options must NOT start with "A.", "B.", etc. — just the plain text
+- DO NOT ask generic questions like "What is the main idea?" or "What is the best summary?".
+- The correct answer keys MUST rotate (A, B, C, D) so that not all questions have the same answer.
+- All 4 options must be plausible but clearly only one is correct.
+- Return a JSON array of objects only.
 
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "passage": "3–5 sentence English passage about a specific topic from the RPP",
-  "question": "specific detail question about the passage",
-  "options": ["option text", "option text", "option text", "option text"],
-  "answer": "{$this->rotateAnswer($n)}",
-  "explanation": "1 sentence explaining why the answer is correct"
-}
+Respond ONLY with a valid JSON array, no markdown fences:
+[
+  {
+    "passage": "3–5 sentence English passage about a specific topic from the RPP",
+    "question": "specific detail question about the passage",
+    "options": ["option text", "option text", "option text", "option text"],
+    "answer": "A, B, C, or D",
+    "explanation": "1 sentence explaining why the answer is correct"
+  }
+]
 PROMPT;
     }
 
-    private function listeningPrompt(int $n, string $difficulty, string $excerpt): string
+    private function listeningPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         return <<<PROMPT
 You are an English listening quiz generator for Indonesian junior/senior high school students.
-Study the lesson plan (RPP) excerpt carefully, then create ONE listening multiple-choice question.
+Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} listening multiple-choice questions.
 
 LESSON PLAN EXCERPT:
 {$excerpt}
 
 STRICT REQUIREMENTS:
-- Question number: {$n}, difficulty: {$difficulty}
-- Write a SHORT audio script (3–5 sentences): a dialogue or monologue featuring SPECIFIC names, places, or animals from the RPP
-  * Use character names from the RPP if mentioned (e.g. Galang, Andre, Monita, Pipit)
-  * Reference specific animals, places, or topics from the RPP lesson material
+- Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
+- For each item, write a SHORT audio script (3–5 sentences): a dialogue or monologue featuring SPECIFIC names, places, or animals from the RPP.
 - The question must ask about a SPECIFIC DETAIL from the audio:
   * Who said something / who did something
   * Where a character went or what they saw
   * A specific fact mentioned (name of animal, its habitat, what it eats)
-- DO NOT ask generic questions like "What is the main focus?" 
-- Answer key for question {$n}: {$this->rotateAnswer($n)}
-- All 4 options must be plausible, based on names/facts from the RPP
+- DO NOT ask generic questions like "What is the main focus?".
+- The correct answer keys MUST rotate (A, B, C, D).
+- Return a JSON array of objects only.
 
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "script": "3–5 sentence audio script with specific names/facts from the RPP",
-  "language": "en-US",
-  "rate": 0.95,
-  "question": "specific detail question about who/what/where in the audio",
-  "options": ["option text", "option text", "option text", "option text"],
-  "answer": "{$this->rotateAnswer($n)}",
-  "explanation": "1 sentence explaining why the answer is correct"
-}
+Respond ONLY with a valid JSON array, no markdown fences:
+[
+  {
+    "script": "3–5 sentence audio script with specific names/facts from the RPP",
+    "language": "en-US",
+    "rate": 0.95,
+    "question": "specific detail question about who/what/where in the audio",
+    "options": ["option text", "option text", "option text", "option text"],
+    "answer": "A, B, C, or D",
+    "explanation": "1 sentence explaining why the answer is correct"
+  }
+]
 PROMPT;
     }
 
-    private function speakingPrompt(int $n, string $difficulty, string $excerpt): string
+    private function speakingPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         $minWords = match (true) {
             str_contains($difficulty, 'easy') => 8,
@@ -139,34 +151,31 @@ PROMPT;
 
         return <<<PROMPT
 You are an English speaking task generator for Indonesian junior/senior high school students.
-Study the lesson plan (RPP) excerpt carefully, then create ONE speaking task.
+Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} speaking tasks.
 
 LESSON PLAN EXCERPT:
 {$excerpt}
 
 STRICT REQUIREMENTS:
-- Task number: {$n}, difficulty: {$difficulty}
-- The prompt must reference a SPECIFIC topic, animal, person, or activity from the RPP
-- Examples of good prompts:
-  * "Describe the Cendrawasih bird: where does it live, what does it look like, and why is it special?"
-  * "Explain what passive voice is and give one example from the lesson about Indonesian birds."
-  * "Imagine you are Galang on a birdwatching trip. Describe what you saw and what you did."
-  * "Why is the Helmeted Hornbill in danger? What can people do to protect it?"
-- Minimum words: {$minWords}, response duration: {$duration} seconds
-- Include 3–5 keywords from the RPP material
+- Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
+- For each item, the prompt must reference a SPECIFIC topic, animal, person, or activity from the RPP.
+- Create engaging scenarios (e.g. describing a rare bird, explaining a grammar point, roleplaying a tourist).
+- Return a JSON array of objects only.
 
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "prompt": "specific speaking task prompt referencing RPP content",
-  "scenario": "brief context (1 sentence) for the student",
-  "keywords": ["keyword1", "keyword2", "keyword3"],
-  "minimum_words": {$minWords},
-  "response_duration": {$duration}
-}
+Respond ONLY with a valid JSON array, no markdown fences:
+[
+  {
+    "prompt": "specific speaking task prompt referencing RPP content",
+    "scenario": "brief context (1 sentence) for the student",
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "minimum_words": {$minWords},
+    "response_duration": {$duration}
+  }
+]
 PROMPT;
     }
 
-    private function writingPrompt(int $n, string $difficulty, string $excerpt): string
+    private function writingPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         [$minW, $maxW] = match (true) {
             str_contains($difficulty, 'easy') => [20, 80],
@@ -176,29 +185,27 @@ PROMPT;
 
         return <<<PROMPT
 You are an English writing task generator for Indonesian junior/senior high school students.
-Study the lesson plan (RPP) excerpt carefully, then create ONE writing task.
+Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} writing tasks.
 
 LESSON PLAN EXCERPT:
 {$excerpt}
 
 STRICT REQUIREMENTS:
-- Task number: {$n}, difficulty: {$difficulty}
+- Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
 - The prompt MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the RPP lesson material.
-- Do NOT make it a generic dry prompt. Give it a creative narrative context (story/scenario) or a structured list of 5W+1H questions.
-- Examples of good prompts:
-  * "Imagine you are Galang going birdwatching in the forest of Papua. Write a short story about your adventure. In your story, explain: (1) Who did you go with? (2) What beautiful bird did you see? (3) Where did you find it? (4) Why is it special? (5) How did you feel?"
-  * "Create a story about a day in the life of a Bekantan (proboscis monkey) in Kalimantan. Your story must answer: Who is the main character? What is it doing? Where does it live? When does it search for food? Why is its habitat in danger? How can we save it?"
-  * "Answer the following 5W+1H questions to write a descriptive paragraph about the Helmeted Hornbill: Who hunts this bird? What does it look like? Where is its nest? Why is it critically endangered? How can people protect its population?"
-- Word limit: {$minW}–{$maxW} words
-- Include a helpful instruction sentence
+- E.g. "Imagine you are Galang going birdwatching in Papua. Write a story about: (1) Who did you go with? (2) What bird did you see? ...", or "Answer these 5W+1H questions to write a descriptive paragraph...".
+- Word limit: {$minW}–{$maxW} words.
+- Return a JSON array of objects only.
 
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "prompt": "story-based prompt or a structured 5W+1H question prompt based on the RPP content",
-  "context": "brief instruction or scenario setting for the student",
-  "minimum_words": {$minW},
-  "maximum_words": {$maxW}
-}
+Respond ONLY with a valid JSON array, no markdown fences:
+[
+  {
+    "prompt": "story-based prompt or a structured 5W+1H question prompt based on the RPP content",
+    "context": "brief instruction or scenario setting for the student",
+    "minimum_words": {$minW},
+    "maximum_words": {$maxW}
+  }
+]
 PROMPT;
     }
 
@@ -209,12 +216,9 @@ PROMPT;
     }
 
     /**
-     * Parse and validate Gemini response into the live_quiz_items content_json shape.
-     *
-     * @param array<string,mixed> $raw
-     * @return array<string,mixed>|null
+     * Parse and validate a single Gemini item response into the live_quiz_items content_json shape.
      */
-    private function parse(string $skill, string $level, int $n, array $raw): ?array
+    private function parseItem(string $skill, string $level, int $n, array $raw): ?array
     {
         $common = [
             'skill'      => $skill,

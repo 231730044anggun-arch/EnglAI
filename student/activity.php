@@ -3,6 +3,51 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/koneksi.php';require_once __DIR__.'/../vendor/autoload.php';
 use EnglAI\Audio\BrowserSpeechSynthesisProvider;use EnglAI\Learning\AssessmentService;use EnglAI\Learning\Level;use EnglAI\Learning\ProgressService;use EnglAI\Mvp\StudentSession;use EnglAI\Security\Csrf;use EnglAI\Security\RateLimiter;
 $pdo=db();$member=StudentSession::requireMember($pdo);$classroomId=(int)$member['classroom_id'];$memberId=(int)$member['id'];$attemptId=(int)($_GET['attempt']??$_POST['attempt_id']??0);$error='';
+
+// --- RESET / REPEAT LOGIC FOR LISTENING, SPEAKING, WRITING ---
+if (isset($_GET['repeat']) && (int)$_GET['repeat'] === 1) {
+    $skill = strtolower((string)($_GET['skill'] ?? ''));
+    $level = Level::validate((string)($_GET['level'] ?? ''));
+    if (in_array($skill, ['listening', 'speaking', 'writing'], true)) {
+        $pdo->beginTransaction();
+        try {
+            // Delete assessment results linked to the attempts of this student/classroom/skill/level
+            $pdo->prepare("
+                DELETE FROM assessment_results 
+                WHERE attempt_id IN (
+                    SELECT id FROM learning_attempts 
+                    WHERE member_id = ? 
+                      AND activity_id IN (
+                          SELECT id FROM learning_activities 
+                          WHERE classroom_id = ? AND skill = ? AND level = ?
+                      )
+                )
+            ")->execute([$memberId, $classroomId, $skill, $level]);
+
+            // Delete attempts
+            $pdo->prepare("
+                DELETE FROM learning_attempts 
+                WHERE member_id = ? 
+                  AND activity_id IN (
+                      SELECT id FROM learning_activities 
+                      WHERE classroom_id = ? AND skill = ? AND level = ?
+                  )
+            ")->execute([$memberId, $classroomId, $skill, $level]);
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        // Refresh dynamic progress to 0
+        (new ProgressService($pdo))->refresh($classroomId, $memberId, $skill, $level, null);
+
+        header('Location: /student/activity.php?skill=' . $skill . '&level=' . $level);
+        exit;
+    }
+}
+
 if(strtolower((string)($_GET['skill']??''))==='reading'){header('Location: /student/self_learning.php?level='.rawurlencode((string)($_GET['level']??'intermediate')));exit;}
 if($attemptId>0){$legacy=$pdo->prepare('SELECT l.skill FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.id=? AND a.member_id=?');$legacy->execute([$attemptId,$memberId]);if($legacy->fetchColumn()==='reading'){header('Location: /student/self_learning.php');exit;}}
 if($attemptId<1){$skill=strtolower((string)($_GET['skill']??''));$level=Level::validate((string)($_GET['level']??''));if(!in_array($skill,['reading','listening','speaking','writing'],true)){http_response_code(404);exit;}
@@ -41,7 +86,7 @@ if($attempt['status']==='completed'){
 <?php if($attempt['status']==='completed'):?><section class="card game-card" style="margin-top:18px"><span class="eyebrow">Activity Completed</span><h1 class="gradient-text"><?=htmlspecialchars($attempt['title'])?></h1><div class="stat" style="font-size:4rem"><?=(int)$attempt['score']?>/100</div><p class="lead"><?=htmlspecialchars((string)$attempt['feedback'])?></p>
 <?php if(in_array($attempt['skill'],['reading','listening'],true)):$answer=json_decode((string)$attempt['answer_json'],true);?><div class="analysis-item"><b>Your answer:</b> <?=htmlspecialchars($answer['selected']??'—')?> · <b>Correct:</b> <?=htmlspecialchars($answer['correct_answer']??'—')?></div><div class="analysis-item" style="margin-top:10px"><b>Explanation:</b> <?=htmlspecialchars($content['explanation'])?></div><?php if($attempt['skill']==='listening'):?><div class="analysis-item" style="margin-top:10px"><b>Transcript unlocked:</b><p><?=htmlspecialchars($content['transcript']??$content['script'])?></p></div><?php endif;?>
 <?php elseif($assessmentResult):$criteria=json_decode($assessmentResult['criteria_json'],true)?:[];?><span class="badge <?=$assessmentResult['source']==='ai'?'available':'dev'?>">Assessment · <?=htmlspecialchars($assessmentResult['source'])?></span><div class="grid two" style="margin-top:18px"><?php foreach($criteria as $criterion):?><div class="analysis-item"><b><?=htmlspecialchars(str_replace('_',' ',ucfirst($criterion['name'])))?></b><div class="progress-track"><div class="progress-fill" style="width:<?=max(0,min(100,(float)$criterion['score']))?>%"></div></div><small><?=number_format((float)$criterion['score'],0)?>/100 · <?=htmlspecialchars($criterion['feedback'])?></small></div><?php endforeach;?></div><div class="analysis-item" style="margin-top:16px"><b>Suggested revision</b><p><?=htmlspecialchars($assessmentResult['suggested_revision'])?></p></div><details><summary>Example answer</summary><p><?=htmlspecialchars($assessmentResult['example_answer'])?></p></details><?php endif;?>
-<div class="row" style="margin-top:22px; align-items: center; gap: 10px;"><?php if($hasMore): ?><a class="button gold" href="/student/activity.php?skill=<?=$attempt['skill']?>&level=<?=$attempt['level']?>">Next Activity</a><?php else: ?><span class="badge available" style="padding:12px; font-size:0.95rem; font-weight:bold; vertical-align:middle; display:inline-block; line-height:1.2; margin:0;">✓ All Activities Completed!</span><a class="button gold" href="/student/activity.php?skill=<?=$attempt['skill']?>&level=<?=$attempt['level']?>" style="margin:0;">Repeat / Retake Activity →</a><?php endif; ?><a class="button secondary" href="/student/progress.php" style="margin:0;">View Progress</a></div></section>
+<div class="row" style="margin-top:22px; align-items: center; gap: 10px;"><?php if($hasMore): ?><a class="button gold" href="/student/activity.php?skill=<?=$attempt['skill']?>&level=<?=$attempt['level']?>">Next Activity</a><?php else: ?><span class="badge available" style="padding:12px; font-size:0.95rem; font-weight:bold; vertical-align:middle; display:inline-block; line-height:1.2; margin:0;">✓ All Activities Completed!</span><a class="button gold" href="/student/activity.php?skill=<?=$attempt['skill']?>&level=<?=$attempt['level']?>&repeat=1" style="margin:0;">Repeat / Retake Activity →</a><?php endif; ?><a class="button secondary" href="/student/progress.php" style="margin:0;">View Progress</a></div></section>
 <?php else:?><section class="card game-card" style="margin-top:18px"><span class="eyebrow"><?=htmlspecialchars($attempt['instruction'])?></span><h1><?=htmlspecialchars($attempt['title'])?></h1>
 <?php if($attempt['skill']==='reading'):?><div class="analysis-item"><p><?=htmlspecialchars($content['passage'])?></p></div><p class="question"><?=htmlspecialchars($content['question'])?></p>
 <?php elseif($attempt['skill']==='listening'):?><div class="listening-player" data-listening data-script="<?=htmlspecialchars($content['script'])?>" data-language="<?=htmlspecialchars($audio['language'])?>" data-rate="<?=$audio['rate']?>" data-pitch="<?=$audio['pitch']?>" data-max-replays="<?=$audio['max_replays']?>"><div class="waveform" aria-hidden="true"><?php for($i=0;$i<18;$i++):?><i></i><?php endfor;?></div><button type="button" class="button gold" data-audio-play>▶ Generated Listening Audio</button><span class="muted" data-audio-status aria-live="polite">Transcript locked until submission · <?=$audio['max_replays']?> replays available</span></div><p class="question"><?=htmlspecialchars($content['question'])?></p>
@@ -49,6 +94,6 @@ if($attempt['status']==='completed'){
 <?php else:?><div class="analysis-item"><b>Context</b><p><?=htmlspecialchars($content['context'])?></p></div><p class="question"><?=htmlspecialchars($content['prompt'])?></p><?php endif;?>
 <form method="post" data-activity-form><?=Csrf::field()?><input type="hidden" name="attempt_id" value="<?=$attemptId?>">
 <?php if(in_array($attempt['skill'],['reading','listening'],true)):?><div class="choices"><?php foreach($content['options'] as $i=>$option):$letter=chr(65+$i);?><button class="choice" name="answer" value="<?=$letter?>"><b><?=$letter?></b><span><?=htmlspecialchars($option)?></span></button><?php endforeach;?></div>
-<?php elseif($attempt['skill']==='speaking'):?><div class="row"><button type="button" class="button primary" data-mic>🎙 Start Microphone</button><button type="button" class="button secondary" data-mic-retry>Retry</button></div><p class="muted" data-speech-status aria-live="polite">Jika Speech Recognition tidak didukung, ketik transcript manual.</p><label for="transcript">Transcript preview</label><textarea id="transcript" name="transcript" rows="8" maxlength="12000" data-transcript required></textarea><small class="muted">Minimum guidance: <?=$content['min_words']?> words · AI Speaking Feedback tidak menilai phoneme, stress, intonation, accent, atau pronunciation accuracy.</small><button class="button gold wide" style="margin-top:18px" data-submit>Request AI Speaking Feedback</button>
+<?php elseif($attempt['skill']==='speaking'):?><div class="row"><button type="button" class="button primary" data-mic>🎙 Start Microphone</button><button type="button" class="button secondary" data-mic-retry>Retry</button></div><p class="muted" data-speech-status aria-live="polite">Tekan tombol Microphone lalu mulailah berbicara dalam bahasa Inggris.</p><label for="transcript">Transcript preview (Membaca suara Anda)</label><textarea id="transcript" name="transcript" rows="8" maxlength="12000" data-transcript readonly placeholder="Teks transkripsi suara Anda akan muncul di sini secara otomatis..." style="background: rgba(255,255,255,0.02); cursor: not-allowed;" required></textarea><small class="muted">Minimum guidance: <?=$content['min_words']?> words · AI Speaking Feedback tidak menilai phoneme, stress, intonation, accent, atau pronunciation accuracy.</small><button class="button gold wide" style="margin-top:18px" data-submit>Request AI Speaking Feedback</button>
 <?php else:?><label for="writing">Writing response</label><textarea id="writing" name="writing" rows="15" maxlength="20000" data-writing data-min="<?=$content['min_words']?>" data-max="<?=$content['max_words']?>" required></textarea><div class="row" style="justify-content:space-between"><span data-word-count>0 words · target <?=$content['min_words']?>–<?=$content['max_words']?></span><span class="muted" data-autosave aria-live="polite">Draft not saved</span></div><button class="button gold wide" style="margin-top:18px" data-submit>Submit for AI Review</button><?php endif;?></form></section><?php endif;?>
 </main><script src="/assets/js/visual-effects.js" defer></script><script src="/assets/js/learning-activities.js" defer></script></body></html>

@@ -354,8 +354,14 @@ $skillColors = [
                             </span>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: center;">
-                            <span class="skill-meta">
-                                <?=$row['completed']?> / <?=$row['available']?> Activities
+                            <span class="skill-meta" style="font-size: 0.8rem; display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <span><?=$row['completed']?> / <?=$row['available']?> Activities</span>
+                                <?php if ((int)$row['completed'] > 0): ?>
+                                    <span style="opacity: 0.3;">•</span>
+                                    <span style="color: #34d399; font-weight: 700; background: rgba(52, 211, 153, 0.08); padding: 2px 6px; border-radius: 4px;">✓ <?=(int)$row['correct_count']?> Bener</span>
+                                    <span style="opacity: 0.3;">•</span>
+                                    <span style="color: #f87171; font-weight: 700; background: rgba(248, 113, 113, 0.08); padding: 2px 6px; border-radius: 4px;">✗ <?=(int)$row['incorrect_count']?> Salah</span>
+                                <?php endif; ?>
                             </span>
                             <span class="score-badge">
                                 Avg: <?=number_format((float)$row['average_score'], 1)?>%

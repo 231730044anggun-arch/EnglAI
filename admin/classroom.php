@@ -94,7 +94,7 @@ foreach ($stmt->fetchAll() as $row) {
 }
 $readingBankStatus = [];
 if ($rpp) {
-    $stmt = db()->prepare("SELECT level, SUM(source='ai' AND status='ready' AND JSON_UNQUOTE(JSON_EXTRACT(content_json,'$.source'))='gemini') gemini_count, SUM(source='fallback') fallback_count, SUM(status='archived') archived_count, MAX(CASE WHEN source='ai' AND status='ready' AND JSON_UNQUOTE(JSON_EXTRACT(content_json,'$.source'))='gemini' THEN created_at END) last_generated FROM learning_activities WHERE classroom_id=? AND lesson_plan_id=? AND skill='reading' AND activity_type='standalone_question' GROUP BY level");
+    $stmt = db()->prepare("SELECT level, SUM(status='ready') gemini_count, SUM(status='ready' AND JSON_UNQUOTE(JSON_EXTRACT(content_json,'$.source'))='local_fallback') fallback_count, SUM(status='archived') archived_count, MAX(CASE WHEN status='ready' THEN created_at END) last_generated FROM learning_activities WHERE classroom_id=? AND lesson_plan_id=? AND skill='reading' AND activity_type='standalone_question' GROUP BY level");
     $stmt->execute([$id, $rpp['id']]);
     foreach ($stmt->fetchAll() as $row) $readingBankStatus[strtolower((string)$row['level'])] = $row;
 }
@@ -391,34 +391,34 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                     <form method="post" action="/admin/generate_learning.php">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="classroom_id" value="<?= $id ?>">
-                        <div class="grid two">
+                        <div class="grid two" style="gap: 16px; margin-bottom: 20px;">
                             <div>
-                                <label>Skill</label>
-                                <select name="skill">
+                                <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block;">Skill Focus</label>
+                                <select name="skill" id="generator-skill-select" style="margin-bottom: 0; border-radius: 10px; background: rgba(255,255,255,0.05);">
                                     <?php foreach (['reading', 'listening', 'speaking', 'writing'] as $skill): ?>
                                         <option value="<?= $skill ?>"><?= ucfirst($skill) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div>
-                                <label>Level</label>
-                                <select name="level">
+                                <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block;">Difficulty Level</label>
+                                <select name="level" style="margin-bottom: 0; border-radius: 10px; background: rgba(255,255,255,0.05);">
                                     <?php foreach (['basic', 'intermediate', 'advanced'] as $level): ?>
                                         <option value="<?= $level ?>" <?= $classroom['default_level'] === $level ? 'selected' : '' ?>><?= ucfirst($level) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
-                        <div class="grid three" style="margin-top:1rem">
-                            <button class="button gold" name="reading_mode" value="target">Generate Reading Bank</button>
-                            <button class="button" name="reading_mode" value="more">Generate More Questions</button>
-                            <button class="button" name="reading_mode" value="regenerate">Regenerate Reading Bank</button>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px;">
+                            <button class="button gold" name="reading_mode" value="target" id="btn-gen-target" style="flex: 1; min-width: 200px;">⚡ Generate Reading Bank</button>
+                            <button class="button secondary" name="reading_mode" value="more" id="btn-gen-more" style="flex: 1; min-width: 200px;">➕ Add More Questions</button>
+                            <button class="button secondary" name="reading_mode" value="regenerate" id="btn-gen-regen" style="flex: 1; min-width: 200px; border-color: rgba(239, 68, 68, 0.3); color: #fecaca; background: rgba(239, 68, 68, 0.05);">🔄 Regenerate Bank</button>
                         </div>
                     </form>
                     <h3>Reading Gemini Bank</h3>
-                    <table><thead><tr><th>Level</th><th>Gemini</th><th>Fallback</th><th>RPP</th><th>Status</th></tr></thead><tbody>
+                    <table><thead><tr><th>Level</th><th>Active Qs</th><th>Fallback</th><th>RPP</th><th>Status</th></tr></thead><tbody>
                     <?php foreach(['basic','intermediate','advanced'] as $readingLevel): $bank=$readingBankStatus[$readingLevel]??[];$gemini=(int)($bank['gemini_count']??0); ?>
-                    <tr><td><?= ucfirst($readingLevel) ?></td><td><?= $gemini ?></td><td><?= (int)($bank['fallback_count']??0) ?> excluded</td><td><?= $rpp ? 'v'.(int)$rpp['version'] : '-' ?></td><td><span class="badge <?= $gemini>=20?'available':'dev' ?>"><?= $gemini<20?'Preparing':($gemini<40?'Low Question Stock':'Ready') ?></span></td></tr>
+                    <tr><td><?= ucfirst($readingLevel) ?></td><td><?= $gemini ?></td><td><?= (int)($bank['fallback_count']??0) ?> generated</td><td><?= $rpp ? 'v'.(int)$rpp['version'] : '-' ?></td><td><span class="badge <?= $gemini>=20?'available':'dev' ?>"><?= $gemini<20?'Preparing':($gemini<40?'Low Question Stock':'Ready') ?></span></td></tr>
                     <?php endforeach; ?>
                     </tbody></table>
                     <table>
