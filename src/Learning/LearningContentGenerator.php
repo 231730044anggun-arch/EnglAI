@@ -33,8 +33,8 @@ final class LearningContentGenerator
             ."Complexity Profile: ".json_encode($profile)."\n"
             ."IMPORTANT RULES:\n"
             ."- Base questions on SPECIFIC content from the lesson: animals mentioned, character names, places, grammar points, vocabulary.\n"
-            ."- For Writing: 'prompt' must ask about a SPECIFIC animal/topic/grammar from the lesson (NOT 'Write about Bahasa'). 'context' must be a short 2-3 sentence summary of the relevant lesson content (NOT the raw RPP text).\n"
-            ."- For Listening: 'script' must be a natural 3-5 sentence dialogue or monologue about a specific topic from the lesson (NOT just the RPP header). Include character names from the RPP if available.\n"
+            ."- For Writing: 'prompt' MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the lesson content. Do NOT make it a generic dry prompt. E.g. 'Imagine you are Galang going birdwatching in Papua. Write a story about: (1) Who did you go with? (2) What bird did you see? ...' or 'Create a story about a day in the life of a Bekantan addressing who, what, where, when, why, how...'. 'context' must be a short 2-3 sentence summary of the relevant lesson content.\n"
+            ."- For Listening: 'script' must be a natural 3-5 sentence dialogue or monologue about a specific topic from the lesson. Include character names from the RPP if available.\n"
             ."- For Reading: 'passage' must be a coherent paragraph about a specific animal or topic from the lesson.\n"
             ."- Questions must reference specific names, facts, places, or vocabulary from the lesson material.\n"
             ."- DO NOT use generic prompts like 'Write about Bahasa' or 'Which keyword best connects to the lesson'.\n"
@@ -69,18 +69,18 @@ final class LearningContentGenerator
         preg_match_all('/\b[A-Za-z]{5,}\b/u',$clean,$m);
         $words=array_values(array_unique(array_map('strtolower',$m[0]??[])));
         if(count($words)<8)$words=['bekantan','cendrawasih','hornbill','habitat','endemic','protection','species','indonesia'];
-        // Topic-specific writing/speaking prompts
+        // Topic-specific writing/speaking prompts (5W+1H and story-based questions)
         $writingPrompts=[
-            "Write a short report about a specific animal mentioned in the lesson. Include its habitat, physical description, and one threat it faces.",
-            "Describe what passive voice is and write three example sentences using passive voice about animals from the lesson.",
-            "Explain why endemic animals like those in the lesson need protection. Give at least two specific reasons.",
-            "Compare two animals from the lesson. Describe their similarities and differences in terms of habitat, appearance, and behavior.",
-            "Write a paragraph about {$topic}. Include specific facts about its habitat, diet, and conservation status.",
-            "Describe what you learned about Indonesian endemic animals in this lesson. Which animal is most interesting to you and why?",
-            "Rewrite these sentences in passive voice: (1) Hunters hunt the Helmeted Hornbill for its casque. (2) Scientists study Cendrawasih in Papua.",
-            "Write a fact file about one animal from the lesson: name, classification, habitat, diet, and threats.",
-            "Explain what \"critically endangered\" means and give one example from the lesson material.",
-            "Write a short conservation message about protecting Indonesian endemic birds. Use at least two animals from the lesson.",
+            "Imagine you are an explorer finding a new species in Kalimantan. Write a short story about your discovery. Answer: (1) Who did you go with? (2) What does the animal look like? (3) Where does it live? (4) Why is it unique? (5) How can we protect it?",
+            "Write a story about a day in the life of a Cendrawasih bird in the rainforest of Papua. In your story, cover: Who does it meet? What is it eating? Where is its nest? Why is it afraid of humans? How does it escape?",
+            "Create a narrative story about Galang and his friends going birdwatching. Your story must answer the 5W+1H: Who went? What did they see? Where did they go? When did they start? Why did they go? How did they feel?",
+            "Imagine you are a wildlife conservation officer trying to save the Helmeted Hornbill. Write a short story about your rescue mission, explaining who you helped, what threat they faced, and how you solved it.",
+            "Write a paragraph about {$topic} by answering these questions: Who is responsible for protecting these animals? What is the main threat to their habitat? Where do they live? Why are they endemic?",
+            "Answer the following 5W+1H questions about the Bali Starling: Who is capturing them? What makes them attractive to poachers? Where do they live in the wild? Why are they critically endangered? How can we save them?",
+            "Imagine you are a Bekantan (proboscis monkey) living in a mangrove forest. Write a story about a group of humans visiting your forest. Answer: Who are they? What are they doing? How do you feel?",
+            "Write a short story about an old wise bird in {$topic}. In your story, explain: Who is the wise bird? What advice does it give to the younger birds? Where should they go to find safety?",
+            "Create a narrative about a student named Pipit who writes a blog post about endangered animals. Your story must answer: What animal does she write about? Why is it special? How do her friends help her?",
+            "Answer the 5W+1H questions to write a descriptive report on Indonesian fauna: Who is studying them? What characteristics do they share? Where are they found? Why are they endangered? How do we conserve them?",
         ];
         $speakingPrompts=[
             "Describe the Bekantan (proboscis monkey): where does it live, what does it look like, and why is it endangered?",

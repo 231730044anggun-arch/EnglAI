@@ -183,19 +183,19 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Task number: {$n}, difficulty: {$difficulty}
-- The prompt must reference a SPECIFIC topic, animal, grammar point, or activity from the RPP
+- The prompt MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the RPP lesson material.
+- Do NOT make it a generic dry prompt. Give it a creative narrative context (story/scenario) or a structured list of 5W+1H questions.
 - Examples of good prompts:
-  * "Write a short report about the Bali Starling (Jalak Bali). Include its appearance, habitat, and the threats it faces."
-  * "Rewrite these sentences using passive voice: [sentence from the RPP material]."
-  * "Describe one Indonesian endemic bird of your choice. Explain where it lives and why it needs protection."
-  * "Write a paragraph comparing the Cendrawasih and the Helmeted Hornbill."
+  * "Imagine you are Galang going birdwatching in the forest of Papua. Write a short story about your adventure. In your story, explain: (1) Who did you go with? (2) What beautiful bird did you see? (3) Where did you find it? (4) Why is it special? (5) How did you feel?"
+  * "Create a story about a day in the life of a Bekantan (proboscis monkey) in Kalimantan. Your story must answer: Who is the main character? What is it doing? Where does it live? When does it search for food? Why is its habitat in danger? How can we save it?"
+  * "Answer the following 5W+1H questions to write a descriptive paragraph about the Helmeted Hornbill: Who hunts this bird? What does it look like? Where is its nest? Why is it critically endangered? How can people protect its population?"
 - Word limit: {$minW}–{$maxW} words
 - Include a helpful instruction sentence
 
 Respond ONLY with valid JSON, no markdown fences:
 {
-  "prompt": "specific writing task prompt referencing RPP content",
-  "context": "brief instruction or context sentence for the student",
+  "prompt": "story-based prompt or a structured 5W+1H question prompt based on the RPP content",
+  "context": "brief instruction or scenario setting for the student",
   "minimum_words": {$minW},
   "maximum_words": {$maxW}
 }
