@@ -403,7 +403,7 @@ $history = array_slice($history, 0, 10);
                         <h3><?= ucfirst($skillName) ?></h3>
                         <p class="muted"><?= count($availableLevels) ?> level tersedia · <?= number_format((float)($skillProgress['average_score'] ?? 0), 0) ?>% average</p>
                         <?php if ($availableLevels): ?>
-                            <a class="button primary wide" href="/student/skill.php?skill=<?= $skillName ?>">Continue Learning</a>
+                            <a class="button primary wide" href="<?= $skillName === 'reading' ? '/student/self_learning.php' : '/student/skill.php?skill=' . rawurlencode($skillName) ?>">Continue Learning</a>
                         <?php endif; ?>
                     </article>
                 <?php endforeach; ?>

@@ -1,0 +1,2 @@
+<?php
+declare(strict_types=1);return static function(PDO $pdo):void{foreach(['task_started_at'=>'DATETIME NULL','task_deadline_at'=>'DATETIME NULL','recording_started_at'=>'DATETIME NULL'] as $column=>$definition){$q=$pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='speaking_sessions' AND COLUMN_NAME=?");$q->execute([$column]);if(!(int)$q->fetchColumn())$pdo->exec("ALTER TABLE speaking_sessions ADD COLUMN {$column} {$definition}");}};

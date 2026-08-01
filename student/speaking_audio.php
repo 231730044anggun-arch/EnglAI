@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);require_once __DIR__.'/../config/koneksi.php';require_once __DIR__.'/../vendor/autoload.php';
+use EnglAI\Mvp\StudentSession;$pdo=db();$member=StudentSession::requireMember($pdo);$id=(int)($_GET['id']??0);$q=$pdo->prepare('SELECT storage_path,mime_type,file_size FROM speaking_recordings WHERE id=? AND member_id=? AND classroom_id=?');$q->execute([$id,(int)$member['id'],(int)$member['classroom_id']]);$r=$q->fetch();if(!$r){http_response_code(404);exit;}$path=dirname(__DIR__).'/storage/private/'.$r['storage_path'];if(!is_file($path)){http_response_code(404);exit;}header('Content-Type: '.$r['mime_type']);header('Content-Length: '.filesize($path));header('Cache-Control: private, no-store');readfile($path);

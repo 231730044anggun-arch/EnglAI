@@ -1,0 +1,2 @@
+<?php
+declare(strict_types=1);return static function(PDO $pdo):void{$q=$pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='writing_sessions' AND COLUMN_NAME='sequence_fingerprint'");$q->execute();if(!(int)$q->fetchColumn())$pdo->exec('ALTER TABLE writing_sessions ADD COLUMN sequence_fingerprint CHAR(64) NULL, ADD KEY idx_writing_sequence(member_id,classroom_id,level,sequence_fingerprint)');};

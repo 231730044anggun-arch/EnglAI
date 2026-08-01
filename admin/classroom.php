@@ -445,6 +445,7 @@ $recentActivity = array_slice($recentActivity, 0, 10);
 
                 <section class="card" style="margin:0">
                     <h2>Self Learning Progress</h2>
+                    <p><a class="button secondary" href="/admin/speaking_review.php?classroom_id=<?= $id ?>">Open Speaking Responses</a></p>
                     <table>
                         <thead>
                             <tr>
