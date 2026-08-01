@@ -30,7 +30,7 @@ final class GeminiProvider implements ContentProvider
         ];
         $response = ($this->transport)($url, $payload, $this->timeoutSeconds);
         if ($response['status'] < 200 || $response['status'] >= 300 || $response['body'] === '') {
-            throw new \RuntimeException('AI provider request failed.');
+            throw new \RuntimeException('AI provider request failed (HTTP '.(int)$response['status'].').');
         }
         $envelope = json_decode($response['body'], true);
         if (!is_array($envelope) || isset($envelope['error'])) {

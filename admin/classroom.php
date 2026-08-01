@@ -7,6 +7,11 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use EnglAI\Mvp\ClassroomService;
 use EnglAI\Security\Csrf;
 
+function classroom_h(mixed $value, string $fallback = ''): string {
+    $text = trim((string)($value ?? ''));
+    return htmlspecialchars($text !== '' ? $text : $fallback, ENT_QUOTES, 'UTF-8');
+}
+
 require_admin();
 $teacher = (string)($_SESSION['admin_username'] ?? env_value('ADMIN_USERNAME', 'admin'));
 
@@ -87,6 +92,12 @@ $learningMatrix = [];
 foreach ($stmt->fetchAll() as $row) {
     $learningMatrix[$row['skill']][$row['level']] = $row;
 }
+$readingBankStatus = [];
+if ($rpp) {
+    $stmt = db()->prepare("SELECT level, SUM(source='ai' AND status='ready' AND JSON_UNQUOTE(JSON_EXTRACT(content_json,'$.source'))='gemini') gemini_count, SUM(source='fallback') fallback_count, SUM(status='archived') archived_count, MAX(CASE WHEN source='ai' AND status='ready' AND JSON_UNQUOTE(JSON_EXTRACT(content_json,'$.source'))='gemini' THEN created_at END) last_generated FROM learning_activities WHERE classroom_id=? AND lesson_plan_id=? AND skill='reading' AND activity_type='standalone_question' GROUP BY level");
+    $stmt->execute([$id, $rpp['id']]);
+    foreach ($stmt->fetchAll() as $row) $readingBankStatus[strtolower((string)$row['level'])] = $row;
+}
 
 // Fetch stats of self learning progress
 $stmt = db()->prepare("SELECT l.skill, COUNT(a.id) attempts, COALESCE(AVG(a.score), 0) average_score FROM learning_activities l LEFT JOIN learning_attempts a ON a.activity_id=l.id AND a.status='completed' WHERE l.classroom_id=? GROUP BY l.skill");
@@ -124,7 +135,7 @@ $recentPractices = $stmt->fetchAll();
 // Combine and sort recent student activities
 $recentActivity = array_merge($recentAttempts, $recentPractices);
 usort($recentActivity, function($a, $b) {
-    return strcmp($b['completed_at'], $a['completed_at']);
+    return strcmp((string)($b['completed_at'] ?? ''), (string)($a['completed_at'] ?? ''));
 });
 $recentActivity = array_slice($recentActivity, 0, 10);
 ?>
@@ -133,7 +144,7 @@ $recentActivity = array_slice($recentActivity, 0, 10);
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title><?= htmlspecialchars($classroom['name']) ?> · EnglAI</title>
+    <title><?= classroom_h($classroom['name'] ?? null, 'Classroom') ?> · EnglAI</title>
     <link rel="stylesheet" href="/assets/css/mvp.css">
     <style>
         .tab-panel {
@@ -154,19 +165,19 @@ $recentActivity = array_slice($recentActivity, 0, 10);
         <nav class="breadcrumb" aria-label="Breadcrumb">
             <a href="/admin/">Teacher</a>
             <span>›</span>
-            <strong><?= htmlspecialchars($classroom['name']) ?></strong>
+            <strong><?= classroom_h($classroom['name'] ?? null, 'Classroom') ?></strong>
         </nav>
 
         <section class="card dashboard-hero">
             <div class="toolbar">
                 <div>
-                    <span class="code"><?= htmlspecialchars($classroom['code']) ?></span>
-                    <h1><?= htmlspecialchars($classroom['name']) ?></h1>
-                    <p class="muted"><?= htmlspecialchars($rpp['original_name'] ?? 'Belum ada lesson plan') ?></p>
+                    <span class="code"><?= classroom_h($classroom['code'] ?? null, '-') ?></span>
+                    <h1><?= classroom_h($classroom['name'] ?? null, 'Classroom') ?></h1>
+                    <p class="muted"><?= classroom_h($rpp['original_name'] ?? null, 'Belum ada lesson plan') ?></p>
                 </div>
                 <div class="row">
                     <span class="badge <?= $ready ? 'available' : 'dev' ?>"><?= $ready ? 'Content Ready' : 'Setup Required' ?></span>
-                    <button class="button secondary" data-copy="<?= htmlspecialchars($classroom['code']) ?>">Copy Classroom ID</button>
+                    <button class="button secondary" data-copy="<?= classroom_h($classroom['code'] ?? null) ?>">Copy Classroom ID</button>
                 </div>
             </div>
         </section>
@@ -271,19 +282,19 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                                         <tr>
                                             <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 8px;">
                                                 <img src="/assets/images/avatars/<?= htmlspecialchars($studAvatar) ?>" alt="Avatar" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
-                                                <span><?= htmlspecialchars($act['display_name']) ?></span>
+                                                <span><?= classroom_h($act['display_name'] ?? null, 'Joined Student') ?></span>
                                             </td>
                                             <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 500;">
-                                                <?= $act['title'] === 'Practice Quiz' ? 'Self Learning Practice' : htmlspecialchars($act['title']) ?>
+                                                <?= ($act['title'] ?? '') === 'Practice Quiz' ? 'Self Learning Practice' : classroom_h($act['title'] ?? null, 'Learning Activity') ?>
                                             </td>
                                             <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                                <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(htmlspecialchars($act['skill'])) ?></span>
+                                                <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(classroom_h($act['skill'] ?? null, 'general')) ?></span>
                                             </td>
                                             <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; font-weight: bold; color: <?= $act['score'] >= 80 ? '#10b981' : ($act['score'] >= 50 ? '#3b82f6' : '#ef4444') ?>;">
                                                 <?= (int)$act['score'] ?>/100
                                             </td>
                                             <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; color: rgba(255,255,255,0.5);">
-                                                <?= htmlspecialchars($act['completed_at']) ?>
+                                                <?= classroom_h($act['completed_at'] ?? null, '-') ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -307,8 +318,8 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                         <?php if ($rpp): ?><span class="badge available">Extracted</span><?php endif; ?>
                     </div>
                     <?php if ($rpp): ?>
-                        <p><b><?= htmlspecialchars($rpp['original_name']) ?></b><br>
-                        <small class="muted">Version <?= (int)$rpp['version'] ?> · <?= htmlspecialchars(strtoupper($rpp['file_type'])) ?> · text extraction ready</small></p>
+                        <p><b><?= classroom_h($rpp['original_name'] ?? null, 'Lesson plan') ?></b><br>
+                        <small class="muted">Version <?= (int)$rpp['version'] ?> · <?= classroom_h(strtoupper((string)($rpp['file_type'] ?? '')), '-') ?> · text extraction ready</small></p>
                     <?php endif; ?>
                     <form method="post" enctype="multipart/form-data" action="/admin/classroom_upload.php" data-upload-form>
                         <div class="dropzone" data-dropzone>
@@ -333,7 +344,7 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                             <span class="eyebrow">AI Analysis</span>
                             <h2>Lesson insights</h2>
                         </div>
-                        <span class="badge <?= $source === 'ai' ? 'available' : 'dev' ?>"><?= htmlspecialchars(strtoupper($source)) ?></span>
+                        <span class="badge <?= $source === 'ai' ? 'available' : 'dev' ?>"><?= classroom_h(strtoupper((string)$source), '-') ?></span>
                     </div>
                     <div class="analysis-grid">
                         <?php foreach ([['Topic', $analysis['topic']], ['Objectives', $analysis['objectives']], ['Vocabulary', $analysis['vocabulary']], ['Grammar', $analysis['grammar']], ['AI Recommended Level', $analysis['level']], ['Reason', $storedAnalysis['recommendation_reason'] ?? 'Run AI Analysis untuk rekomendasi terstruktur.']] as $item): ?>
@@ -398,8 +409,18 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                                 </select>
                             </div>
                         </div>
-                        <button class="button gold wide">Generate Self Learning</button>
+                        <div class="grid three" style="margin-top:1rem">
+                            <button class="button gold" name="reading_mode" value="target">Generate Reading Bank</button>
+                            <button class="button" name="reading_mode" value="more">Generate More Questions</button>
+                            <button class="button" name="reading_mode" value="regenerate">Regenerate Reading Bank</button>
+                        </div>
                     </form>
+                    <h3>Reading Gemini Bank</h3>
+                    <table><thead><tr><th>Level</th><th>Gemini</th><th>Fallback</th><th>RPP</th><th>Status</th></tr></thead><tbody>
+                    <?php foreach(['basic','intermediate','advanced'] as $readingLevel): $bank=$readingBankStatus[$readingLevel]??[];$gemini=(int)($bank['gemini_count']??0); ?>
+                    <tr><td><?= ucfirst($readingLevel) ?></td><td><?= $gemini ?></td><td><?= (int)($bank['fallback_count']??0) ?> excluded</td><td><?= $rpp ? 'v'.(int)$rpp['version'] : '-' ?></td><td><span class="badge <?= $gemini>=20?'available':'dev' ?>"><?= $gemini<20?'Preparing':($gemini<40?'Low Question Stock':'Ready') ?></span></td></tr>
+                    <?php endforeach; ?>
+                    </tbody></table>
                     <table>
                         <thead>
                             <tr>
@@ -435,7 +456,7 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                         <tbody>
                             <?php foreach ($skillStats as $stat): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars(ucfirst($stat['skill'])) ?></td>
+                                    <td><?= classroom_h(ucfirst((string)($stat['skill'] ?? '')), '-') ?></td>
                                     <td><?= (int)$stat['attempts'] ?></td>
                                     <td><?= number_format((float)$stat['average_score'], 1) ?>%</td>
                                 </tr>
@@ -475,9 +496,9 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                                 <?php foreach ($quizzes as $q): ?>
                                     <tr>
                                         <td>#<?= (int)$q['id'] ?></td>
-                                        <td><span class="badge <?= $q['state'] === 'ACTIVE' ? 'live' : '' ?>"><?= htmlspecialchars($q['state']) ?></span></td>
+                                        <td><span class="badge <?= $q['state'] === 'ACTIVE' ? 'live' : '' ?>"><?= classroom_h($q['state'] ?? null, '-') ?></span></td>
                                         <td><?= (int)$q['question_count'] ?></td>
-                                        <td><?= htmlspecialchars($q['difficulty']) ?></td>
+                                        <td><?= classroom_h($q['difficulty'] ?? null, '-') ?></td>
                                         <td><a class="button secondary" href="/admin/quiz.php?id=<?= (int)$q['id'] ?>">Open</a></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -516,12 +537,12 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                                 }
                             ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($m['display_name'] ?: 'Joined Student') ?></td>
+                                    <td><?= classroom_h($m['display_name'] ?? null, 'Joined Student') ?></td>
                                     <td>
                                         <img src="/assets/images/avatars/<?= htmlspecialchars($memberAvatar) ?>" alt="Avatar" width="40" height="40" style="border-radius:50%; background:#2b2b36; border:1px solid rgba(255,255,255,0.2); vertical-align:middle; object-fit:cover;">
                                     </td>
-                                    <td><span class="badge"><?= htmlspecialchars($m['membership_status'] ?? 'active') ?></span></td>
-                                    <td><?= htmlspecialchars($m['last_seen_at'] ?: $m['created_at']) ?></td>
+                                    <td><span class="badge"><?= classroom_h($m['membership_status'] ?? null, 'active') ?></span></td>
+                                    <td><?= classroom_h($m['last_seen_at'] ?? $m['created_at'] ?? null, '-') ?></td>
                                     <td>
                                         <form method="post" action="/admin/membership_action.php" class="row">
                                             <?= Csrf::field() ?>
@@ -545,53 +566,6 @@ $recentActivity = array_slice($recentActivity, 0, 10);
 
     <script src="/assets/js/visual-effects.js" defer></script>
     <script src="/assets/js/teacher.js" defer></script>
-    <script>
-        function switchClassroomTab(tabId, event) {
-            if (event) {
-                event.preventDefault();
-            }
-            // Remove active class from all links
-            document.querySelectorAll('.tabs a').forEach(el => el.classList.remove('active'));
-            // Hide all tab panels
-            document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
-            
-            // Add active to current link
-            const targetLink = document.querySelector(`.tabs a[href="#${tabId}"]`);
-            if (targetLink) {
-                targetLink.classList.add('active');
-            }
-            // Show target panel
-            const targetPanel = document.getElementById(`tab-${tabId}`);
-            if (targetPanel) {
-                targetPanel.classList.add('active');
-            }
-            // Store in localStorage
-            localStorage.setItem('classroom-active-tab', tabId);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            // Intercept clicks on links
-            document.querySelectorAll('.tabs a').forEach(el => {
-                const href = el.getAttribute('href');
-                if (href.startsWith('#')) {
-                    const tabId = href.substring(1);
-                    el.addEventListener('click', (e) => {
-                        switchClassroomTab(tabId, e);
-                    });
-                }
-            });
-
-            // Restore active tab (fallback to overview)
-            let activeTab = localStorage.getItem('classroom-active-tab') || 'overview';
-            // If the URL has a hash matching one of the tabs, use it
-            if (window.location.hash) {
-                const hashTab = window.location.hash.substring(1);
-                if (['overview', 'lesson-plan', 'self-learning', 'live-quiz', 'students'].includes(hashTab)) {
-                    activeTab = hashTab;
-                }
-            }
-            switchClassroomTab(activeTab);
-        });
-    </script>
+    <script src="/assets/js/classroom-tabs.js" defer></script>
 </body>
 </html>

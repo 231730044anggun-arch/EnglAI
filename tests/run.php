@@ -63,6 +63,7 @@ require __DIR__ . '/unit/upload_test.php';
 require __DIR__ . '/unit/rate_limiter_test.php';
 require __DIR__ . '/unit/frontend_redesign_test.php';
 require __DIR__ . '/unit/release_test.php';
+require __DIR__ . '/unit/reading_self_learning_test.php';
 
 if ($failures) {
     fwrite(STDERR, "Test gagal:\n- " . implode("\n- ", $failures) . "\n");

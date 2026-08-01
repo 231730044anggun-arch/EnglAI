@@ -32,6 +32,13 @@ if (!$classroom) {
 $classroomId = (int)$classroom['id'];
 $userId = (int)$_SESSION['user_id'];
 $defaultNickname = (string)($_SESSION['user_name'] ?? '');
+$existingQuery = db()->prepare('SELECT display_name, avatar FROM classroom_members WHERE classroom_id=? AND user_id=? LIMIT 1');
+$existingQuery->execute([$classroomId, $userId]);
+$existingProfile = $existingQuery->fetch();
+if ($existingProfile) {
+    $defaultNickname = trim((string)($existingProfile['display_name'] ?? '')) ?: $defaultNickname;
+}
+$currentAvatar = trim((string)($existingProfile['avatar'] ?? ''));
 
 // Dynamically scan avatars directory
 $avatarDir = __DIR__ . '/../assets/images/avatars';
@@ -56,8 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nickname = trim((string)($_POST['nickname'] ?? ''));
         $selectedAvatar = trim((string)($_POST['avatar'] ?? ''));
 
-        if ($nickname === '' || mb_strlen($nickname) > 60) {
-            throw new InvalidArgumentException('Nickname wajib diisi (maksimal 60 karakter).');
+        if (mb_strlen($nickname) < 2 || mb_strlen($nickname) > 60) {
+            throw new InvalidArgumentException('Display name wajib berisi 2–60 karakter.');
         }
         if (!in_array($selectedAvatar, $avatars, true)) {
             throw new InvalidArgumentException('Karakter avatar tidak valid.');
@@ -196,6 +203,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             opacity: 1;
             transform: scale(1);
         }
+        .onboarding-overlay{min-height:calc(100vh - 90px);display:grid;place-items:center;padding:32px 18px}.onboarding-modal{width:min(620px,100%);max-width:none!important;animation:modal-in .45s ease both;box-shadow:0 30px 90px rgba(0,0,0,.48),0 0 55px rgba(124,58,237,.14)}
+        .onboarding-modal h1{margin-bottom:8px}.profile-field{margin-top:22px}.avatar-grid{grid-template-columns:repeat(5,minmax(72px,1fr));max-height:310px}.avatar-wrapper{width:74px;height:70px}.avatar-option:focus-within .avatar-card{outline:3px solid rgba(255,230,109,.6);outline-offset:2px}@keyframes modal-in{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}@media(max-width:620px){.avatar-grid{grid-template-columns:repeat(3,1fr);gap:10px}.avatar-wrapper{width:68px;height:64px}.onboarding-overlay{padding:20px 12px}}@media(prefers-reduced-motion:reduce){.onboarding-modal{animation:none}.avatar-card{transition:none}}
     </style>
 </head>
 <body>
@@ -207,11 +216,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <a class="button secondary" href="/student/logout.php">Logout</a>
         </div>
     </header>
-    <main class="game-shell">
-        <section class="card" style="max-width: 500px;">
+    <main class="onboarding-overlay">
+        <section class="card onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title">
             <span class="eyebrow">Classroom: <?= htmlspecialchars($classroom['name']) ?></span>
-            <h1>Pilih Karakter & Nickname</h1>
-            <p class="muted">Sesuaikan identitas Anda untuk kelas ini.</p>
+            <h1 id="profile-title">Complete your classroom profile</h1>
+            <p class="muted">Pilih avatar dan display name yang akan terlihat di Classroom dan Live Quiz.</p>
 
             <?php if ($error): ?>
                 <div class="alert error"><?= htmlspecialchars($error) ?></div>
@@ -220,16 +229,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="post">
                 <?= Csrf::field() ?>
                 
-                <label for="nickname">Nickname Kelas</label>
-                <input id="nickname" name="nickname" maxlength="60" placeholder="Contoh: jejeboy" value="<?= htmlspecialchars($defaultNickname) ?>" required>
-                <small class="muted">Nama panggilan unik Anda yang akan tampil di kelas.</small>
+                <div class="profile-field"><label for="nickname">Display name</label>
+                <input id="nickname" name="nickname" minlength="2" maxlength="60" autocomplete="nickname" placeholder="Nama yang tampil di classroom" value="<?= htmlspecialchars($defaultNickname) ?>" required>
+                <small class="muted">Nama ini dapat berbeda untuk setiap Classroom.</small></div>
 
-                <label style="margin-top:20px; display:block; margin-bottom:8px;">Pilih Karakter Anda</label>
+                <label class="profile-field" style="display:block; margin-bottom:8px;">Avatar selection</label>
                 
                 <div class="avatar-grid">
                     <?php foreach ($avatars as $i => $av): ?>
                         <label class="avatar-option">
-                            <input type="radio" name="avatar" value="<?= htmlspecialchars($av) ?>" <?= $i === 0 ? 'required' : '' ?> style="display:none">
+                            <input type="radio" name="avatar" value="<?= htmlspecialchars($av) ?>" required <?= $currentAvatar === $av ? 'checked' : '' ?> style="position:absolute;opacity:0;pointer-events:none">
                             <div class="avatar-card">
                                 <div class="avatar-wrapper">
                                     <img src="/assets/images/avatars/<?= htmlspecialchars($av) ?>" alt="Avatar" loading="lazy">
@@ -240,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endforeach; ?>
                 </div>
 
-                <button class="button gold wide" style="margin-top:20px">Join Classroom →</button>
+                <button class="button gold wide" style="margin-top:20px">Continue to Classroom</button>
             </form>
         </section>
     </main>
