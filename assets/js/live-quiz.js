@@ -32,7 +32,128 @@ function players(rows){replace("participants",rows.map(row=>{const item=node("di
 function renderTeacher(data){document.getElementById("state").textContent=data.state;document.getElementById("participant-count").textContent=String(data.participants.length);players(data.participants);leaderboard(data.leaderboard,["FINISHED","CLOSED"].includes(data.state));const start=document.getElementById("start"),close=document.getElementById("close"),nextBtn=document.getElementById("next-btn");if(start)start.hidden=data.state!=="LOBBY";if(nextBtn)nextBtn.hidden=data.state!=="ACTIVE";if(close)close.hidden=!["LOBBY","FINISHED"].includes(data.state);const lobbyStatus = document.getElementById("lobby-status"), lobbyEyebrow = document.getElementById("lobby-eyebrow");if(lobbyStatus){lobbyStatus.textContent = data.state === "LOBBY" ? "● Waiting" : "● Active";lobbyStatus.className = "status " + (data.state === "LOBBY" ? "waiting" : "active");}if(lobbyEyebrow){lobbyEyebrow.textContent = data.state === "LOBBY" ? "Lobby" : "Active Quiz";}const q=document.getElementById("teacher-question");if(q){if(data.question){q.replaceChildren(node("span",`${data.question.skill} · Question ${data.current_index+1}/${data.question_count}`,"eyebrow"),node("p",data.question.question,"question"),node("p",`${data.submitted_count}/${data.participants.length} submitted · ${data.pending_assessments} assessment pending`,"muted"));timer(data)}else q.replaceChildren(node("p",data.state==="EVALUATING"?`AI Evaluating · ${data.pending_assessments} pending`:data.state==="LOBBY"?"Waiting for Students…":data.state,"muted"))}const podium=document.getElementById("podium");if(podium)podium.hidden=!["FINISHED","CLOSED"].includes(data.state);if(data.state==="FINISHED"&&!celebrated){celebrated=true;window.EnglAIVisuals?.confetti()}}
 function meta(question){const row=node("div","", "row");row.append(node("span",question.skill,"badge available"),node("span",question.difficulty,"badge dev"),node("span",question.question_type.replaceAll("_"," "),"badge"));return row}
 function objective(question,game){const choices=node("div","", "choices");if(question.submitted)choices.append(node("p","Answer Submitted · Waiting for Other Players","muted"));else question.options.forEach((option,index)=>{const letter=String.fromCharCode(65+index),button=node("button","", "choice");button.type="button";button.append(node("b",letter),node("span",option));button.addEventListener("click",()=>submit({answer:letter},button));choices.append(button)});game.append(meta(question),node("p",question.question,"question"),choices)}
-function listening(question,game){const info=node("p","Generated Listening Audio · transcript locked until review","muted"),wave=node("div","", "audio-wave");for(let i=0;i<12;i++)wave.append(node("span",""));const play=node("button","Play audio","button gold");const choices=node("div","", "choices");question.options.forEach((option,index)=>{const letter=String.fromCharCode(65+index),button=node("button","", "choice");button.type="button";button.disabled=true;button.append(node("b",letter),node("span",option));button.addEventListener("click",()=>submit({answer:letter},button));choices.append(button)});play.addEventListener("click",()=>{if(replays>=(question.content.max_replays||2))return;if(!("speechSynthesis" in window)){info.textContent="Browser TTS tidak didukung pada perangkat ini.";return}replays++;const utter=new SpeechSynthesisUtterance(question.content.script||"");utter.lang=question.content.language||"en-US";utter.rate=Number(question.content.rate||1);utter.pitch=Number(question.content.pitch||1);speechSynthesis.speak(utter);choices.querySelectorAll("button").forEach(button=>button.disabled=false);play.textContent=`Replay ${replays}/${question.content.max_replays||2}`;if(replays>=(question.content.max_replays||2))play.disabled=true});game.append(meta(question),wave,info,play,node("p",question.question,"question"),question.submitted?node("p","Answer Submitted","muted"):choices)}
+function pickBestVoice(lang){
+  const voices=speechSynthesis.getVoices();
+  // Priority: neural/premium > Google > Microsoft > any English
+  const preferred=['Google US English','Google UK English Female','Microsoft Zira','Microsoft David','Samantha','Daniel'];
+  for(const name of preferred){const v=voices.find(v=>v.name===name);if(v)return v;}
+  // Fallback: any en-US, then any en-*
+  return voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'))||null;
+}
+let voicesReady=false;
+if(speechSynthesis.onvoiceschanged!==undefined)speechSynthesis.onvoiceschanged=()=>{voicesReady=true;};
+function listening(question,game){
+  const content=question.content||{};
+  const maxReplays=content.max_replays||2;
+  const script=content.script||'';
+  const lang=content.language||'en-US';
+  const rate=Number(content.rate||0.9);
+  const pitch=Number(content.pitch||1);
+
+  // UI elements
+  const wrap=node('div','','listening-wrap');
+  wrap.style.cssText='display:flex;flex-direction:column;gap:14px';
+
+  // Audio player card
+  const playerCard=node('div','','audio-player-card');
+  playerCard.style.cssText='background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px';
+
+  const waveWrap=node('div','','audio-wave');
+  waveWrap.id='audio-wave-anim';
+  waveWrap.style.cssText='flex:0 0 auto;opacity:.4;transition:opacity .3s';
+  for(let i=0;i<10;i++)waveWrap.append(node('span',''));
+
+  const infoCol=node('div','');
+  infoCol.style.cssText='flex:1;min-width:0';
+  const audioLabel=node('p','🎧 Generated Listening Audio','');
+  audioLabel.style.cssText='font-weight:700;margin:0 0 4px;font-size:.9rem';
+  const audioSub=node('p',`Dengarkan baik-baik sebelum menjawab · ${maxReplays}× replay`,'muted');
+  audioSub.style.cssText='font-size:.78rem;margin:0';
+  infoCol.append(audioLabel,audioSub);
+
+  const playBtn=node('button','▶ Play','button gold');
+  playBtn.style.cssText='flex-shrink:0;min-width:90px';
+  playerCard.append(waveWrap,infoCol,playBtn);
+  wrap.append(playerCard);
+
+  // Status text
+  const status=node('p','Tekan Play untuk mendengarkan audio. Tombol jawaban tersedia setelah audio diputar.','muted');
+  status.style.cssText='font-size:.82rem;text-align:center';
+  wrap.append(status);
+
+  // Question
+  wrap.append(meta(question),node('p',question.question,'question'));
+
+  // Choices (locked until audio plays)
+  const choices=node('div','','choices');
+  const choiceButtons=[];
+  question.options.forEach((option,index)=>{
+    const letter=String.fromCharCode(65+index);
+    const button=node('button','','choice');
+    button.type='button';button.disabled=true;
+    button.style.opacity='0.45';
+    button.append(node('b',letter),node('span',option));
+    button.addEventListener('click',()=>submit({answer:letter},button));
+    choices.append(button);
+    choiceButtons.push(button);
+  });
+  if(question.submitted){choices.replaceChildren(node('p','Answer Submitted · Waiting for Other Players','muted'));}
+  wrap.append(choices);
+  game.append(wrap);
+
+  // TTS play handler
+  let played=0;
+  let speaking=false;
+  function playAudio(){
+    if(played>=maxReplays||speaking)return;
+    if(!('speechSynthesis' in window)){status.textContent='Browser TTS tidak didukung pada perangkat ini.';return;}
+    speechSynthesis.cancel();
+    const utter=new SpeechSynthesisUtterance(script);
+    utter.lang=lang;
+    utter.rate=rate;
+    utter.pitch=pitch;
+    utter.volume=1;
+    const voice=pickBestVoice(lang);
+    if(voice)utter.voice=voice;
+    utter.onstart=()=>{
+      speaking=true;
+      waveWrap.style.opacity='1';
+      playBtn.textContent='🔊 Playing…';
+      playBtn.disabled=true;
+    };
+    utter.onend=()=>{
+      speaking=false;
+      played++;
+      waveWrap.style.opacity='0.4';
+      const remaining=maxReplays-played;
+      if(remaining>0){
+        playBtn.textContent=`↺ Replay (${remaining} left)`;
+        playBtn.disabled=false;
+      }else{
+        playBtn.textContent='▶ No replays left';
+        playBtn.disabled=true;
+      }
+      // Unlock choices after first play
+      if(played>=1&&!question.submitted){
+        choiceButtons.forEach(b=>{b.disabled=false;b.style.opacity='1';});
+        status.textContent='Audio selesai. Pilih jawaban Anda.';
+      }
+    };
+    utter.onerror=()=>{
+      speaking=false;
+      waveWrap.style.opacity='0.4';
+      playBtn.textContent='▶ Retry';
+      playBtn.disabled=false;
+      status.textContent='Gagal memutar audio. Coba lagi.';
+    };
+    // Wait for voices if not ready yet
+    const doSpeak=()=>{speechSynthesis.speak(utter);};
+    if(speechSynthesis.getVoices().length>0){doSpeak();}
+    else{speechSynthesis.onvoiceschanged=()=>{doSpeak();speechSynthesis.onvoiceschanged=null;};}
+  }
+  playBtn.addEventListener('click',playAudio);
+}
+
 function speaking(question,game){const consent=node("label","", "row"),check=document.createElement("input");check.type="checkbox";check.style.width="auto";consent.append(check,node("span","Saya setuju menggunakan microphone; hanya transcript yang dikirim."));const area=document.createElement("textarea");area.placeholder="Transcript appears here, or type manually…";area.maxLength=12000;const mic=node("button","Start microphone","button secondary mic-pulse");const status=node("p","AI Speaking Feedback evaluates relevance, grammar, vocabulary, completeness, and clarity based on transcription.","muted");mic.addEventListener("click",()=>{const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){status.textContent="Speech Recognition tidak didukung. Ketik transcript secara manual.";return}if(!check.checked){status.textContent="Berikan consent sebelum microphone digunakan.";return}const recognition=new Recognition();recognition.lang="en-US";recognition.onresult=event=>{area.value=event.results[0][0].transcript;status.textContent="Transcript ready. Review before submit.";};recognition.onerror=()=>{status.textContent="Microphone tidak tersedia. Manual transcript tetap dapat digunakan.";};recognition.start();mic.textContent="Listening…";mic.classList.add("recording")});const send=node("button","Submit transcript","button gold");send.addEventListener("click",()=>submit({transcript:area.value,submission_method:area.value?"manual_transcript":""},send));game.append(meta(question),node("p",question.content.scenario||"","muted"),node("p",question.question,"question"),consent,mic,area,status,send)}
 function writing(question,game){const area=document.createElement("textarea");area.className="response-editor";area.placeholder="Write your response…";const key=`englai-live-${quizId}-${question.id}`,counter=node("p","0 words","muted"),limits=`${question.content.minimum_words||1}–${question.content.maximum_words||1000} words`;area.value=localStorage.getItem(key)||"";function count(){const words=area.value.trim()?area.value.trim().split(/\s+/).length:0;counter.textContent=`${words} words · required ${limits} · draft autosaved`;localStorage.setItem(key,area.value)}area.addEventListener("input",count);count();const send=node("button","Lock and submit","button gold");send.addEventListener("click",()=>submit({writing_submission:area.value},send));game.append(meta(question),node("p",question.content.context||"","muted"),node("p",question.question,"question"),area,counter,send)}
 function renderStudent(data){document.getElementById("state").textContent=data.state;leaderboard(data.leaderboard,["FINISHED","CLOSED"].includes(data.state));const game=document.getElementById("game");if(!game)return;if(data.state==="LOBBY"){game.replaceChildren(node("span",data.mode==="final_challenge"?"Final Challenge Lobby":"Live Quiz Lobby","eyebrow"),node("h1","Waiting for Teacher…"),node("p","Identity tersimpan; reconnect tidak membuat participant baru.","muted"));return}if(data.state==="EVALUATING"){game.replaceChildren(node("span","AI Evaluating","eyebrow"),node("h1","Finalizing scores…"),node("p",`${data.pending_assessments} assessment pending. Fallback aktif jika provider timeout.`,"muted"));return}if(["FINISHED","CLOSED"].includes(data.state)){const review=node("a","Open Personal Review","button secondary");review.href=`/student/quiz_review.php?id=${quizId}`;game.replaceChildren(node("span","Final Results","eyebrow"),node("h1",data.mode==="final_challenge"?"English Master Challenge Complete":"Quiz Finished!","gradient-text"),node("p","Final Leaderboard dan achievement telah disimpan.","muted"),review);document.getElementById("podium").hidden=false;if(!celebrated){celebrated=true;window.EnglAIVisuals?.confetti()}return}if(data.state==="ACTIVE"&&data.question){timer(data);if(lastQuestion===data.question.id)return;lastQuestion=data.question.id;replays=0;game.replaceChildren();if(data.question.submitted){game.append(meta(data.question),node("h2",data.question.submitted.assessment_status==="PENDING"?"AI Evaluating":"Answer Submitted"),node("p","Waiting for Other Players","muted"));return}if(data.question.question_type==="listening_objective")listening(data.question,game);else if(data.question.question_type==="speaking_response")speaking(data.question,game);else if(data.question.question_type==="writing_response")writing(data.question,game);else objective(data.question,game)}}
