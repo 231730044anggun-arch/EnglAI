@@ -5,11 +5,18 @@ require_once __DIR__ . '/../config/koneksi.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use EnglAI\Mvp\StudentSession;
+use EnglAI\Learning\ReadingSessionService;
+
+function student_h(mixed $value, string $fallback = ''): string {
+    $text = trim((string)($value ?? ''));
+    return htmlspecialchars($text !== '' ? $text : $fallback, ENT_QUOTES, 'UTF-8');
+}
 
 $pdo = db();
 $member = StudentSession::requireMember($pdo);
 $classroomId = (int)$member['classroom_id'];
-$avatarFile = $member['avatar'] ?: 'a.jpg';
+$studentName = trim((string)($member['display_name'] ?? '')) ?: 'Guest Student';
+$avatarFile = trim((string)($member['avatar'] ?? '')) ?: 'a.jpg';
 if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $avatarFile)) {
     $avatarFile = 'a.jpg';
 }
@@ -100,9 +107,10 @@ foreach ($stmt->fetchAll() as $item) {
 }
 
 // Fetch stats of self learning per skill
-$stmt = $pdo->prepare("SELECT skill, COUNT(*) completed, COALESCE(AVG(score),0) average_score, MAX(score) latest_score FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.member_id=? AND a.status='completed' GROUP BY skill");
+$stmt = $pdo->prepare("SELECT l.skill, COUNT(a.id) attempts, COUNT(DISTINCT CASE WHEN a.status='completed' THEN a.activity_id END) completed, COALESCE(AVG(CASE WHEN a.status='completed' THEN a.score END),0) average_score, MAX(CASE WHEN a.status='completed' THEN a.score END) latest_score FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.member_id=? GROUP BY l.skill");
 $stmt->execute([(int)$member['id']]);
 $phase2Progress = array_column($stmt->fetchAll(), null, 'skill');
+$readingLevels = (new ReadingSessionService($pdo))->productionLevelAvailability($classroomId, (int)$member['id']);
 
 // Dynamic recommendation engine
 $recSkill = 'reading'; // default fallback
@@ -229,7 +237,7 @@ $history = array_slice($history, 0, 10);
     <header class="nav">
         <a class="brand" href="/student/dashboard.php"><span class="brand-mark">E</span>EnglAI</a>
         <div class="row">
-            <span class="badge available"><?= htmlspecialchars($member['display_name']) ?></span>
+            <span class="badge available"><?= student_h($studentName, 'Guest Student') ?></span>
             <a class="button secondary" href="/student/logout.php">Leave Classroom</a>
         </div>
     </header>
@@ -237,7 +245,7 @@ $history = array_slice($history, 0, 10);
         <nav class="breadcrumb">
             <a href="/student/account.php">Workspace</a>
             <span>›</span>
-            <strong><?= htmlspecialchars($member['classroom_name']) ?></strong>
+            <strong><?= student_h($member['classroom_name'] ?? null, 'Classroom') ?></strong>
         </nav>
 
         <!-- Dynamic Live Quiz Pulsing Notification Banner -->
@@ -256,9 +264,9 @@ $history = array_slice($history, 0, 10);
                 <div class="row" style="align-items: center; gap: 15px;">
                     <img src="/assets/images/avatars/<?= htmlspecialchars($avatarFile) ?>" alt="Avatar" width="60" height="60" style="border-radius: 50%; border: 2px solid #FFE66D; background: #2b2b36; object-fit: cover;">
                     <div>
-                        <span class="code"><?= htmlspecialchars($member['classroom_code']) ?></span>
-                        <h1><?= htmlspecialchars($member['classroom_name']) ?></h1>
-                        <p class="muted">Student: <strong><?= htmlspecialchars($member['display_name']) ?></strong> · Teacher: <?= htmlspecialchars($teacherName) ?> · <?= htmlspecialchars((string)$lesson) ?></p>
+                        <span class="code"><?= student_h($member['classroom_code'] ?? null, '-') ?></span>
+                        <h1><?= student_h($member['classroom_name'] ?? null, 'Classroom') ?></h1>
+                        <p class="muted">Student: <strong><?= student_h($studentName, 'Guest Student') ?></strong> · Teacher: <?= student_h($teacherName, 'Belum tersedia') ?> · <?= student_h($lesson, 'Lesson plan sedang disiapkan') ?></p>
                     </div>
                 </div>
                 <?php if ($quiz): ?>
@@ -332,19 +340,19 @@ $history = array_slice($history, 0, 10);
                                 <?php foreach ($history as $h): ?>
                                     <tr>
                                         <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 500;">
-                                            <?= $h['type'] === 'practice' ? 'Self Learning Practice' : htmlspecialchars($h['title']) ?>
+                                            <?= $h['type'] === 'practice' ? 'Self Learning Practice' : student_h($h['title'] ?? null, 'Learning Activity') ?>
                                         </td>
                                         <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                            <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(htmlspecialchars($h['skill'])) ?></span>
+                                            <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(student_h($h['skill'] ?? null, 'general')) ?></span>
                                         </td>
                                         <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-transform: capitalize;">
-                                            <?= htmlspecialchars($h['level']) ?>
+                                            <?= student_h($h['level'] ?? null, '-') ?>
                                         </td>
                                         <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; font-weight: bold; color: <?= $h['score'] >= 80 ? '#10b981' : ($h['score'] >= 50 ? '#3b82f6' : '#ef4444') ?>;">
                                             <?= (int)$h['score'] ?>/100
                                         </td>
                                         <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; color: rgba(255,255,255,0.5);">
-                                            <?= htmlspecialchars($h['completed_at']) ?>
+                                            <?= student_h($h['completed_at'] ?? null, '-') ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -367,7 +375,7 @@ $history = array_slice($history, 0, 10);
                             <p class="muted" style="margin: 4px 0 0 0; font-size: 0.9rem;"><?= htmlspecialchars($skillDescriptions[$recSkill]) ?></p>
                             <p style="margin: 8px 0 0 0; font-size: 0.85rem; opacity: 0.9;"><?= $recReason ?></p>
                         </div>
-                        <a class="button gold" href="/student/skill.php?skill=<?= $recSkill ?>" style="margin: 0;">Mulai Latihan →</a>
+                        <a class="button gold" href="<?= $recSkill === 'reading' ? '/student/self_learning.php' : '/student/skill.php?skill=' . $recSkill ?>" style="margin: 0;">Mulai Latihan →</a>
                     </div>
                 </div>
             <?php endif; ?>
@@ -375,9 +383,19 @@ $history = array_slice($history, 0, 10);
                 <?php foreach ([['📖', 'reading'], ['🎧', 'listening'], ['🎤', 'speaking'], ['✍️', 'writing']] as $skillData): 
                     $skillName = $skillData[1];
                     $availableLevels = $phase2[$skillName] ?? [];
+                    if ($skillName === 'reading') {
+                        $availableLevels = array_filter($readingLevels, static fn(array $item): bool => $item['ready']);
+                    }
                     $skillProgress = $phase2Progress[$skillName] ?? null;
                     $done = (int)($skillProgress['completed'] ?? 0);
-                    $status = !$availableLevels ? 'Not Generated' : ($done > 0 ? 'In Progress' : 'Available');
+                    $attempts = (int)($skillProgress['attempts'] ?? 0);
+                    $totalAvailable = $skillName === 'reading' ? array_sum(array_map(static fn(array $row): int => (int)$row['valid_count'], $availableLevels)) : array_sum(array_map(static fn(array $row): int => (int)$row['available'], $availableLevels));
+                    $status = $totalAvailable === 0 ? 'Not Generated' : ($done >= $totalAvailable ? 'Completed' : ($attempts > 0 ? 'In Progress' : 'Available'));
+                    if ($skillName === 'reading' && $totalAvailable > 0) {
+                        $hasActiveReading = count(array_filter($readingLevels, static fn(array $item): bool => !empty($item['active_session']))) > 0;
+                        $hasCompletedReading = count(array_filter($readingLevels, static fn(array $item): bool => (int)$item['completed_sessions'] > 0)) > 0;
+                        $status = $hasActiveReading ? 'In Progress' : ($hasCompletedReading ? 'Completed' : 'Available');
+                    }
                 ?>
                     <article class="card <?= $availableLevels ? 'hover' : '' ?>" id="<?= $skillName ?>">
                         <span class="badge <?= $availableLevels ? 'available' : 'dev' ?>"><?= $status ?></span>
@@ -385,7 +403,7 @@ $history = array_slice($history, 0, 10);
                         <h3><?= ucfirst($skillName) ?></h3>
                         <p class="muted"><?= count($availableLevels) ?> level tersedia · <?= number_format((float)($skillProgress['average_score'] ?? 0), 0) ?>% average</p>
                         <?php if ($availableLevels): ?>
-                            <a class="button primary wide" href="/student/skill.php?skill=<?= $skillName ?>">Continue Learning</a>
+                            <a class="button primary wide" href="<?= $skillName === 'reading' ? '/student/self_learning.php' : '/student/skill.php?skill=' . $skillName ?>">Continue Learning</a>
                         <?php endif; ?>
                     </article>
                 <?php endforeach; ?>
@@ -425,7 +443,7 @@ $history = array_slice($history, 0, 10);
                                     <span style="display: flex; align-items: center; gap: 8px;">
                                         <b>#<?= $idx + 1 ?></b> 
                                         <img src="/assets/images/avatars/<?= htmlspecialchars($leadAvatar) ?>" alt="Avatar" width="28" height="28" style="border-radius: 50%; object-fit: cover; background: #2b2b36; border: 1px solid rgba(255,255,255,0.1); vertical-align: middle;">
-                                        <?= htmlspecialchars($lead['display_name']) ?>
+                                        <?= student_h($lead['display_name'] ?? null, 'Joined Student') ?>
                                     </span>
                                     <b><?= (int)$lead['total_score'] ?> pts</b>
                                 </li>
@@ -466,11 +484,11 @@ $history = array_slice($history, 0, 10);
                                 }
                             ?>
                                 <tr>
-                                    <td><b>#<?= $idx + 1 ?></b> <?= htmlspecialchars($m['display_name'] ?: 'Joined Student') ?></td>
+                                    <td><b>#<?= $idx + 1 ?></b> <?= student_h($m['display_name'] ?? null, 'Joined Student') ?></td>
                                     <td>
                                         <img src="/assets/images/avatars/<?= htmlspecialchars($memberAvatar) ?>" alt="Avatar" width="36" height="36" style="border-radius: 50%; background: #2b2b36; border: 1px solid rgba(255,255,255,0.2); object-fit: cover; vertical-align: middle;">
                                     </td>
-                                    <td><?= htmlspecialchars($m['last_seen_at'] ?: '—') ?></td>
+                                    <td><?= student_h($m['last_seen_at'] ?? null, '—') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

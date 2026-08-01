@@ -32,4 +32,10 @@ final class RppTextCleaner
         }
         return trim(implode("\n", $cleaned));
     }
+
+    public static function pedagogicalContext(string $text): string
+    {
+        $text=self::clean($text);$seen=[];$kept=[];
+        foreach(preg_split('/\n+/u',$text,-1,PREG_SPLIT_NO_EMPTY)?:[] as $line){$line=trim($line);if($line===''||preg_match('/^(modul ajar|satuan pendidikan|kelas\s*\/|fase\s*:|alokasi waktu|tahun penyusunan|nama\s*:|mengetahui|kepala sekolah|guru mata pelajaran)/iu',$line))continue;$finger=mb_strtolower(preg_replace('/[^\pL\pN]+/u',' ',$line)??$line);$finger=trim($finger);if($finger===''||isset($seen[$finger]))continue;$near=mb_substr($finger,0,100);if(isset($seen[$near]))continue;$seen[$finger]=true;$seen[$near]=true;$kept[]=$line;if(mb_strlen(implode("\n",$kept))>9000)break;}return trim(implode("\n",$kept));
+    }
 }

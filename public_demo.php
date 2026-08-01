@@ -307,8 +307,8 @@ html,body{height:100%;overflow:hidden;font-family:'Poppins',sans-serif;backgroun
   <div class="logo-wrap">
     <span class="logo-ico">🌿</span>
     <div class="logo-txt">EnglAI</div>
-    <div class="logo-sub">AI-Powered English Learning Game</div>
-    <div class="logo-tag">Belajar Bahasa Inggris dengan Seru &amp; Kompetitif! 🚀</div>
+    <div class="logo-sub">Public Game</div>
+    <div class="logo-tag">Practice English through interactive games without joining a classroom.</div>
     <div class="unit-pills">
       <span class="pill">🐒 Unit 1 · Bekantan</span>
       <span class="pill">🦧 Unit 2 · Orangutan &amp; Gorilla</span>
