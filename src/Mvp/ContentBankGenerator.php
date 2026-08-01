@@ -150,6 +150,13 @@ final class ContentBankGenerator
         }
         $items = [];
         $difficulty = ['easy', 'medium', 'hard'];
+        $templates = [
+            'What is the meaning of the key word "%s" in the uploaded RPP context?',
+            'Select the best vocabulary word connected to the classroom topic: "%s".',
+            'Which term from the lesson plan is most relevant to this reading focus? ("%s")',
+            'Identify the core concept discussed in the lesson plan matching: "%s".',
+            'Choose the vocabulary option that matches this week\'s lesson focus: "%s".'
+        ];
         foreach (['self_learning', 'live_quiz'] as $typeIndex => $type) {
             for ($i = 0; $i < 20; $i++) {
                 $answer = ucfirst($words[$i % count($words)]);
@@ -162,15 +169,19 @@ final class ContentBankGenerator
                 if (count(array_unique($options)) < 4) {
                     $options = [$answer, 'Different idea', 'Unrelated detail', 'Opposite meaning'];
                 }
-                $question = $type === 'self_learning'
-                    ? sprintf('Practice %d: Which lesson-plan word best completes this reading focus?', $i + 1)
-                    : sprintf('Competition %d: Select the key word connected to the classroom reading.', $i + 1);
+                shuffle($options);
+                $correctIndex = array_search($answer, $options, true);
+                $ans = chr(65 + $correctIndex);
+
+                $template = $templates[$i % count($templates)];
+                $question = sprintf($template, $answer);
+                
                 $items[] = [
                     'content_type' => $type,
                     'u' => $i + 1,
                     'q' => $question,
                     'op' => $options,
-                    'ans' => 'A',
+                    'ans' => $ans,
                     'exp' => "\"{$answer}\" appears in the uploaded lesson-plan context.",
                     'cat' => 'Reading',
                     'dif' => $difficulty[($i + $typeIndex) % 3],

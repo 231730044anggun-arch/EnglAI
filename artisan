@@ -12,7 +12,8 @@ if ($command === 'serve') {
             $port = substr($arg, 7);
         }
     }
-    echo "http://127.0.0.1:{$port}\n";
+    echo "\n  \033[30;42m INFO \033[0m  Server running on [http://127.0.0.1:{$port}].  \n\n";
+    echo "  Press Ctrl+C to stop the server\n\n";
     // Redirect stderr to NUL to hide PHP server logs on Windows
     passthru("php -S 127.0.0.1:{$port} router.php 2>NUL");
 } else {

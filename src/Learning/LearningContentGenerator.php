@@ -26,7 +26,15 @@ final class LearningContentGenerator
     private function fromAi(string $skill,string $level,string $text): array
     {
         $key=(string)env_value('GEMINI_API_KEY','');if($key==='')throw new \RuntimeException('Provider unavailable.');$profile=Level::profile($level);
-        $prompt="Generate exactly 10 {$skill} self-learning activities at {$level} level from this RPP. Complexity: ".json_encode($profile).". Return JSON array only. Every item requires title,instruction,competency,source_excerpt. Reading/listening require question,options exactly 4,answer A-D,explanation,vocabulary array; reading also passage; listening also script,audio object language/rate/pitch/max_replays. Speaking requires scenario,prompt,example_response,keywords array,min_words,rubric array. Writing requires prompt,context,min_words,max_words,rubric array,example_answer. RPP:\n".mb_substr($text,0,22000);
+        $prompt="You are a professional ESL teacher. Generate exactly 10 high-quality {$skill} self-learning activities at {$level} level directly based on the pedagogical content, vocabulary, and topics in this RPP.\n"
+            . "Complexity Profile: ".json_encode($profile).".\n"
+            . "The questions and options must NOT be trivial or too simple. They must match the specified level.\n"
+            . "Return a JSON array only. Every activity must contain: title, instruction, competency, source_excerpt.\n"
+            . "- For Reading/Listening: must contain: 'passage' (for reading) or 'script' (for listening, plus 'transcript' matching the script), 'question' (challenging and relevant), 'options' (exactly 4 distinct, plausible choices), 'answer' (index A-D as a single uppercase letter), 'explanation' (detailed explanation of all options), 'vocabulary' (array of keywords), and 'audio' (for listening, an object containing: provider='browser_speech_synthesis', language='en-US', rate, pitch, max_replays).\n"
+            . "- For Speaking: must contain: scenario, prompt, example_response, keywords array, min_words, rubric array.\n"
+            . "- For Writing: must contain: prompt, context, min_words, max_words, rubric array, example_answer.\n"
+            . "Ensure options A, B, C, and D are fully populated with 4 distinct, meaningful choices based on the lesson plan.\nRPP:\n"
+            . mb_substr($text,0,22000);
         $data=(new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-2.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate($prompt);$items=array_is_list($data)?$data:($data['activities']??[]);if(!is_array($items)||count($items)<10)throw new \RuntimeException('AI activity batch invalid.');return array_slice($items,0,10);
     }
     /** @return list<array<string,mixed>> */
@@ -34,8 +42,30 @@ final class LearningContentGenerator
     {
         $profile=Level::profile($level);$clean=trim(preg_replace('/\s+/u',' ',strip_tags($text))??$text);$excerpt=mb_substr($clean,0,max(180,(int)$profile['length']*3));preg_match_all('/\b[A-Za-z]{5,}\b/u',$clean,$m);$words=array_values(array_unique(array_map('strtolower',$m[0]??[])));if(count($words)<8)$words=['language','context','reading','meaning','learning','response','example','classroom'];
         $items=[];for($i=0;$i<10;$i++){$key=ucfirst($words[$i%count($words)]);$base=['title'=>ucfirst($skill).' Practice '.($i+1),'instruction'=>$this->instruction($skill,$level),'competency'=>ucfirst($skill).' · contextual response','source_excerpt'=>$excerpt,'level'=>$level];
-            if($skill==='reading'){$passage=$this->passage($excerpt,$level,$i);$base+=['passage'=>$passage,'learning_objective'=>"Identify {$profile['thinking']} in a {$level} passage.",'vocabulary'=>array_slice($words,$i%max(1,count($words)-5),5),'question'=>"Which keyword best connects to the lesson passage in Reading Practice ".($i+1)."?",'options'=>[$key,ucfirst($words[($i+1)%count($words)]),ucfirst($words[($i+2)%count($words)]),ucfirst($words[($i+3)%count($words)])],'answer'=>'A','explanation'=>"{$key} is taken from the classroom lesson-plan context."];}
-            elseif($skill==='listening'){$script=$this->passage("Listen carefully. ".$excerpt,$level,$i);$base+=['script'=>$script,'transcript'=>$script,'audio'=>['provider'=>'browser_speech_synthesis','language'=>'en-US','rate'=>$level==='basic'?.85:($level==='advanced'?1.05:.95),'pitch'=>1.0,'voice_preference'=>'any English voice','max_replays'=>3],'vocabulary'=>array_slice($words,0,5),'question'=>"Which word is emphasized in Listening Practice ".($i+1)."?",'options'=>[$key,ucfirst($words[($i+1)%count($words)]),ucfirst($words[($i+2)%count($words)]),ucfirst($words[($i+3)%count($words)])],'answer'=>'A','explanation'=>"The generated listening script includes {$key}."];}
+            if($skill==='reading'){
+                $passage=$this->passage($excerpt,$level,$i);
+                $answerVal = $key;
+                $options = [$answerVal, ucfirst($words[($i+1)%count($words)]), ucfirst($words[($i+2)%count($words)]), ucfirst($words[($i+3)%count($words)])];
+                if(count(array_unique($options))<4) {
+                    $options = [$answerVal, 'Different concept', 'Unrelated idea', 'Opposite statement'];
+                }
+                shuffle($options);
+                $correctIndex = array_search($answerVal, $options, true);
+                $ans = chr(65 + $correctIndex);
+                $base+=['passage'=>$passage,'learning_objective'=>"Identify {$profile['thinking']} in a {$level} passage.",'vocabulary'=>array_slice($words,$i%max(1,count($words)-5),5),'question'=>"Which keyword best connects to the lesson passage in Reading Practice ".($i+1)."?",'options'=>$options,'answer'=>$ans,'explanation'=>"The correct answer {$answerVal} relates to the lesson plan context."];
+            }
+            elseif($skill==='listening'){
+                $script=$this->passage("Listen carefully. ".$excerpt,$level,$i);
+                $answerVal = $key;
+                $options = [$answerVal, ucfirst($words[($i+1)%count($words)]), ucfirst($words[($i+2)%count($words)]), ucfirst($words[($i+3)%count($words)])];
+                if(count(array_unique($options))<4) {
+                    $options = [$answerVal, 'Incorrect response', 'Alternative topic', 'Irrelevant option'];
+                }
+                shuffle($options);
+                $correctIndex = array_search($answerVal, $options, true);
+                $ans = chr(65 + $correctIndex);
+                $base+=['script'=>$script,'transcript'=>$script,'audio'=>['provider'=>'browser_speech_synthesis','language'=>'en-US','rate'=>$level==='basic'?.85:($level==='advanced'?1.05:.95),'pitch'=>1.0,'voice_preference'=>'any English voice','max_replays'=>3],'vocabulary'=>array_slice($words,0,5),'question'=>"Which word is emphasized in Listening Practice ".($i+1)."?",'options'=>$options,'answer'=>$ans,'explanation'=>"The generated listening script includes {$key}."];
+            }
             elseif($skill==='speaking'){$base+=['scenario'=>"You are discussing the classroom topic at {$level} level.",'prompt'=>"Explain how {$key} relates to the lesson topic. Give ".($level==='basic'?'two simple sentences':($level==='advanced'?'a clear analytical response':'a short connected response')).".",'example_response'=>"In this lesson, {$key} is important because it supports the main idea and helps learners communicate clearly.",'keywords'=>array_slice($words,$i%max(1,count($words)-3),3),'min_words'=>$level==='basic'?15:($level==='advanced'?60:35),'rubric'=>['response_relevance','task_completion','grammar','vocabulary','completeness','transcription_clarity']];}
             else{$base+=['prompt'=>"Write about {$key} in relation to the classroom lesson topic.",'context'=>$excerpt,'min_words'=>$level==='basic'?40:($level==='advanced'?140:80),'max_words'=>$level==='basic'?90:($level==='advanced'?280:170),'rubric'=>['task_completion','relevance','grammar','vocabulary','organization','coherence','mechanics'],'example_answer'=>"The lesson presents {$key} as part of its central context. A strong response explains the connection, supports it with relevant details, and uses clear organization."];}
             $items[]=$base;

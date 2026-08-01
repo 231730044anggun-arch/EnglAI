@@ -10,18 +10,6 @@ final class StudentSession
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
-        $directory = dirname(__DIR__, 2) . '/storage/sessions';
-        if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
-            throw new \RuntimeException('Student session storage tidak tersedia.');
-        }
-        session_save_path($directory);
-        session_name('englai_student');
-        session_set_cookie_params([
-            'httponly' => true,
-            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-            'samesite' => 'Lax',
-            'path' => '/',
-        ]);
         session_start();
     }
 
@@ -32,7 +20,8 @@ final class StudentSession
         $memberId = (int) ($_SESSION['student_member_id'] ?? 0);
         $token = (string) ($_SESSION['student_token'] ?? '');
         if ($memberId < 1 || !preg_match('/^[a-f0-9]{64}$/', $token)) {
-            header('Location: /index.php?error=' . rawurlencode('Masukkan Classroom ID untuk melanjutkan.'));
+            $target = (($_SESSION['user_role'] ?? '') === 'student') ? '/student/account.php' : '/index.php';
+            header('Location: ' . $target . '?error=' . rawurlencode('Masukkan Classroom ID untuk melanjutkan.'));
             exit;
         }
         $statement = $pdo->prepare(
@@ -45,7 +34,8 @@ final class StudentSession
         $member = $statement->fetch();
         if (!$member) {
             self::destroy();
-            header('Location: /index.php?error=' . rawurlencode('Sesi classroom tidak valid.'));
+            $target = (($_SESSION['user_role'] ?? '') === 'student') ? '/student/account.php' : '/index.php';
+            header('Location: ' . $target . '?error=' . rawurlencode('Sesi classroom tidak valid.'));
             exit;
         }
         $pdo->prepare('UPDATE classroom_members SET last_seen_at = NOW() WHERE id = ?')->execute([$memberId]);
@@ -55,7 +45,6 @@ final class StudentSession
     public static function establish(int $memberId, int $classroomId, string $token): void
     {
         self::start();
-        session_regenerate_id(true);
         $_SESSION['student_member_id'] = $memberId;
         $_SESSION['student_classroom_id'] = $classroomId;
         $_SESSION['student_token'] = $token;
@@ -64,11 +53,8 @@ final class StudentSession
     public static function destroy(): void
     {
         self::start();
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
-        }
-        session_destroy();
+        unset($_SESSION['student_member_id']);
+        unset($_SESSION['student_classroom_id']);
+        unset($_SESSION['student_token']);
     }
 }

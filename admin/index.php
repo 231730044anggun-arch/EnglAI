@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/_auth.php';require_once __DIR__.'/../vendor/autoload.php';
 use EnglAI\Mvp\ClassroomService;use EnglAI\Security\Csrf;
-require_admin();$teacher=(string)($_SESSION['admin_username']??env_value('ADMIN_USERNAME','admin'));$teacherId=(int)($_SESSION['user_id']??0);$error='';
+require_admin();$teacher=(string)($_SESSION['admin_username']??env_value('ADMIN_USERNAME','admin'));$teacherId=(int)($_SESSION['user_id']??0);$teacherDisplayName=(string)($_SESSION['user_name']??$teacher);if($teacherDisplayName===''){$teacherDisplayName=$teacher;}$error='';
 if($_SERVER['REQUEST_METHOD']==='POST'){Csrf::requireValid($_POST['csrf_token']??null);try{$id=(new ClassroomService(db()))->create($teacher,(string)($_POST['name']??''));header('Location: classroom.php?id='.$id.'&message='.rawurlencode('Classroom berhasil dibuat.'));exit;}catch(Throwable $e){$error=$e->getMessage();}}
 $stmt=db()->prepare("SELECT c.*,
 (SELECT COUNT(*) FROM classroom_members m WHERE m.classroom_id=c.id) member_count,
@@ -19,9 +19,9 @@ UNION ALL (SELECT CONCAT('Live Quiz #',q.id,' · ',q.state),COALESCE(q.finished_
 ORDER BY event_at DESC LIMIT 6");$recent->execute([$teacher,$teacherId,$teacher,$teacherId]);$activities=$recent->fetchAll();
 ?>
 <!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Teacher Dashboard · EnglAI</title><link rel="stylesheet" href="/assets/css/mvp.css"></head>
-<body><div class="stars" aria-hidden="true"></div><header class="nav"><a class="brand" href="/admin/"><span class="brand-mark">E</span>EnglAI</a><div class="row"><span class="muted">Teacher · <?=htmlspecialchars($teacher)?></span><form method="post" action="/admin/logout.php"><?=Csrf::field()?><button class="button secondary">Logout</button></form></div></header>
+<body><div class="stars" aria-hidden="true"></div><header class="nav"><a class="brand" href="/admin/"><span class="brand-mark">E</span>EnglAI</a><div class="row"><span class="muted">Teacher · <?=htmlspecialchars($teacherDisplayName)?></span><form method="post" action="/admin/logout.php"><?=Csrf::field()?><button class="button secondary">Logout</button></form></div></header>
 <main class="shell"><nav class="breadcrumb" aria-label="Breadcrumb"><span>Teacher</span><span>›</span><strong>Dashboard</strong></nav>
-<section class="card dashboard-hero"><span class="eyebrow">Teacher Workspace</span><h1>Selamat datang, <span class="gradient-text"><?=htmlspecialchars($teacher)?></span></h1><p class="muted">Kelola Classroom, RPP, content bank, dan Live Quiz dari satu tempat.</p><a class="button primary" href="#create-classroom">+ Create Classroom</a></section>
+<section class="card dashboard-hero"><span class="eyebrow">Teacher Workspace</span><h1>Selamat datang, <span class="gradient-text"><?=htmlspecialchars($teacherDisplayName)?></span></h1><p class="muted">Kelola Classroom, RPP, content bank, dan Live Quiz dari satu tempat.</p><a class="button primary" href="#create-classroom">+ Create Classroom</a></section>
 <?php if($error):?><div class="alert error" role="alert"><?=htmlspecialchars($error)?></div><?php endif;?>
 <section class="grid four" aria-label="Teacher metrics">
 <?php foreach([['🏫',count($classrooms),'Classroom'],['👥',(int)$summary['students'],'Student'],['📚',(int)$summary['learning_sessions'],'Self Learning'],['🏆',(int)$summary['quizzes'],'Live Quiz']] as $metric):?><article class="card metric"><div class="icon-box"><?=$metric[0]?></div><div><div class="stat"><?=$metric[1]?></div><span class="muted"><?=$metric[2]?></span></div></article><?php endforeach;?></section>

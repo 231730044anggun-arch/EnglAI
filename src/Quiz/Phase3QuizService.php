@@ -87,6 +87,38 @@ final class Phase3QuizService
     { $q=$this->pdo->prepare('SELECT id,display_name,avatar,last_seen_at FROM quiz_participants WHERE quiz_session_id=? ORDER BY joined_at,id');$q->execute([$id]);return $q->fetchAll(); }
     public function leaderboard(int $id): array
     { $q=$this->pdo->prepare("SELECT p.id,p.display_name,p.avatar,p.total_score,p.correct_answers,p.completion_count,p.achievement,p.final_rank,COALESCE(AVG(CASE WHEN q.question_type IN ('objective','listening_objective') THEN a.response_ms END),999999) average_response_ms FROM quiz_participants p LEFT JOIN quiz_answers a ON a.participant_id=p.id LEFT JOIN quiz_session_questions q ON q.id=a.session_question_id WHERE p.quiz_session_id=? GROUP BY p.id ORDER BY p.total_score DESC,p.correct_answers DESC,p.rubric_performance DESC,average_response_ms ASC,p.completion_count DESC,p.display_name ASC,p.joined_at ASC");$q->execute([$id]);return $q->fetchAll(); }
+    public function forceAdvance(int $quizId, int $classroomId): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $q = $this->pdo->prepare('SELECT * FROM quiz_sessions WHERE id=? AND classroom_id=? FOR UPDATE');
+            $q->execute([$quizId, $classroomId]);
+            $quiz = $q->fetch();
+            if (!$quiz || $quiz['state'] !== 'ACTIVE') {
+                $this->pdo->commit();
+                return;
+            }
+            
+            $next = (int)$quiz['current_index'] + 1;
+            if ($next >= (int)$quiz['question_count']) {
+                $pending = (int)$this->scalar("SELECT COUNT(*) FROM quiz_assessment_jobs WHERE quiz_session_id=? AND status IN ('PENDING','PROCESSING')", [$quizId]);
+                if ($pending > 0) {
+                    $this->pdo->prepare("UPDATE quiz_sessions SET state='EVALUATING', question_started_at=NULL, question_deadline_at=NULL WHERE id=?")->execute([$quizId]);
+                } else {
+                    $this->finish($quizId, $quiz);
+                }
+            } else {
+                $timer = (int)$this->scalar('SELECT timer_seconds FROM quiz_session_questions WHERE quiz_session_id=? AND position=?', [$quizId, $next]);
+                $this->pdo->prepare('UPDATE quiz_sessions SET current_index=?, question_started_at=NOW(3), question_deadline_at=DATE_ADD(NOW(3), INTERVAL ? SECOND) WHERE id=?')->execute([$next, $timer, $quizId]);
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
     private function finish(int $id,array $quiz): void
     {
         $rows=$this->leaderboard($id);$mode=(string)$quiz['quiz_mode'];$skills=json_decode((string)$quiz['selected_skills_json'],true)?:['reading'];

@@ -1,4 +1,4 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
-use EnglAI\Mvp\StudentSession;StudentSession::destroy();header('Location: /');exit;
+use EnglAI\Mvp\StudentSession;StudentSession::destroy();header('Location: /student/account.php');exit;
