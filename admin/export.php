@@ -97,7 +97,7 @@ function gradeFrom(float $avg):string{return $avg>=90?'A':($avg>=80?'B':($avg>=7
     <div class="btn-row">
       <a class="btn btn-back" href="/admin/analytics.php?classroom_id=<?=$cid?>">← Analytics</a>
       <a class="btn btn-ghost" href="/admin/report.php?classroom_id=<?=$cid?>">🖨️ Print Report</a>
-      <a class="btn btn-primary" href="/admin/export_csv.php?classroom_id=<?=$cid?>&type=classroom_csv">⬇️ Download CSV</a>
+      <button class="btn btn-primary" onclick="downloadActiveTabCSV()">⬇️ Download CSV</button>
     </div>
   </div>
 
@@ -274,6 +274,74 @@ function filterTable(tableId, query) {
   document.querySelectorAll('#' + tableId + ' tbody tr').forEach(row => {
     row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
+}
+// Export active tab to CSV
+function downloadActiveTabCSV() {
+  const activeTabBtn = document.querySelector('.tab.active');
+  const activeTabName = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'export';
+  
+  const activePanel = document.querySelector('.tab-panel.active');
+  if (!activePanel) return;
+  const table = activePanel.querySelector('table');
+  if (!table) return;
+
+  const rows = [];
+  
+  // Headers
+  const headerCols = table.querySelectorAll('thead th');
+  const headers = [];
+  headerCols.forEach(col => {
+    let text = col.innerText.trim();
+    if (text === 'Average Score') text = 'Average Score (%)';
+    if (text === 'Avg Score') text = 'Avg Score (%)';
+    if (text === 'Completion') text = 'Completion (%)';
+    if (text === 'Correct Rate') text = 'Correct Rate (%)';
+    if (text === 'Avg Response') text = 'Avg Response (ms)';
+    headers.push('"' + text.replace(/"/g, '""') + '"');
+  });
+  rows.push(headers.join(','));
+
+  // Body rows
+  const bodyRows = table.querySelectorAll('tbody tr');
+  bodyRows.forEach(row => {
+    if (row.style.display === 'none') return;
+    if (row.querySelector('td[colspan]')) return; // empty row
+
+    const rowData = [];
+    const cols = row.querySelectorAll('td');
+    cols.forEach(col => {
+      let val = col.innerText.trim();
+      val = val.replace(/\s*exercises\s*$/i, '');
+      if (val.endsWith('%')) {
+        val = val.slice(0, -1);
+      }
+      val = val.replace(/\s*ms\s*$/i, '');
+      if (val === '—') {
+        val = '';
+      }
+      val = val.replace(/"/g, '""');
+      if (/^[=+\-@]/.test(val)) {
+        val = "'" + val;
+      }
+      rowData.push('"' + val + '"');
+    });
+    
+    if (rowData.length > 0) {
+      rows.push(rowData.join(','));
+    }
+  });
+
+  const csvContent = "\uFEFF" + rows.join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  
+  const className = "<?= he($classroom['name']) ?>".toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  link.setAttribute("download", `englai-${activeTabName}-${className}-${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 </script>
 </body>
