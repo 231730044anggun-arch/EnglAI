@@ -79,7 +79,7 @@ final class ExportService {
         fputcsv($stream, ['STUDENT GRADEBOOK']);
         fputcsv($stream, ['Student Name', 'Email / Username', 'Completed Exercises', 'Average Score']);
         $q = $this->pdo->prepare("
-            SELECT m.id, m.display_name, m.username,
+            SELECT m.id, m.display_name, m.user_id,
                 (SELECT COUNT(*) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') as completed_attempts,
                 (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') as avg_score
             FROM classroom_members m
@@ -91,7 +91,7 @@ final class ExportService {
         foreach ($students as $s) {
             fputcsv($stream, [
                 self::safeCell($s['display_name'] ?: 'Joined Student'),
-                self::safeCell($s['username']),
+                self::safeCell('Member #' . $s['user_id']),
                 self::safeCell((string)$s['completed_attempts']),
                 self::safeCell($s['avg_score'] !== null ? $s['avg_score'] . '%' : '—')
             ]);
@@ -114,7 +114,7 @@ final class ExportService {
         fputcsv($stream, ['ENGLAI STUDENT PERFORMANCE REPORT']);
         fputcsv($stream, ['==================================================']);
         fputcsv($stream, ['Student Name', $m['member']['display_name'] ?: 'Student #' . $member]);
-        fputcsv($stream, ['Email / Username', $m['member']['username']]);
+        fputcsv($stream, ['Member ID', 'Member #' . ($m['member']['user_id'] ?? $member)]);
         fputcsv($stream, ['Classroom ID', $classroom]);
         fputcsv($stream, ['Exported By', $actor]);
         fputcsv($stream, ['Export Date', date('Y-m-d H:i:s')]);
