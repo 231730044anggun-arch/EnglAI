@@ -6,7 +6,7 @@ require_admin();$teacher=(string)($_SESSION['admin_username']??env_value('ADMIN_
 if($_SERVER['REQUEST_METHOD']==='POST'){Csrf::requireValid($_POST['csrf_token']??null);try{$id=(new ClassroomService(db()))->create($teacher,(string)($_POST['name']??''));header('Location: classroom.php?id='.$id.'&message='.rawurlencode('Classroom berhasil dibuat.'));exit;}catch(Throwable $e){$error=$e->getMessage();}}
 $stmt=db()->prepare("SELECT c.*,
 (SELECT COUNT(*) FROM classroom_members m WHERE m.classroom_id=c.id) member_count,
-(SELECT COUNT(*) FROM content_questions q WHERE q.classroom_id=c.id AND q.content_type='self_learning') self_count,
+(SELECT COUNT(*) FROM learning_activities la WHERE la.classroom_id=c.id AND la.status='ready') self_count,
 (SELECT COUNT(*) FROM content_questions q WHERE q.classroom_id=c.id AND q.content_type='live_quiz') live_count,
 (SELECT original_name FROM classroom_lesson_plans lp WHERE lp.classroom_id=c.id AND lp.is_active=1 ORDER BY version DESC LIMIT 1) rpp_name
 FROM classrooms c WHERE c.teacher_key=? OR (c.teacher_user_id IS NOT NULL AND c.teacher_user_id=?) ORDER BY c.created_at DESC");$stmt->execute([$teacher,$teacherId]);$classrooms=$stmt->fetchAll();

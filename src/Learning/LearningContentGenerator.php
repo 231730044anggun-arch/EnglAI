@@ -32,8 +32,9 @@ final class LearningContentGenerator
             ."Complexity Profile: ".json_encode($profile)."\n"
             ."IMPORTANT RULES:\n"
             ."- Base questions on SPECIFIC content from the lesson: animals mentioned, character names, places, grammar points, vocabulary.\n"
-            ."- For Writing: 'prompt' MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the lesson content. Do NOT make it a generic dry prompt. E.g. 'Imagine you are Galang going birdwatching in Papua. Write a story about: (1) Who did you go with? (2) What bird did you see? ...' or 'Create a story about a day in the life of a Bekantan addressing who, what, where, when, why, how...'. 'context' must be a short 2-3 sentence summary of the relevant lesson content.\n"
-            ."- For Listening: 'script' must be a natural 3-5 sentence dialogue or monologue about a specific topic from the lesson. Include character names from the RPP if available.\n"
+            ."- For Writing: 'prompt' MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the lesson content. Do NOT make it a generic dry prompt.\n"
+            ."- For Speaking: 'prompt' MUST be a specific English sentence of 8-15 words based on the lesson content for the student to read aloud. Do NOT make it a question. The instruction must always be 'Read the following sentence aloud with clear pronunciation.'. 'example_response' must be the exact same sentence.\n"
+            ."- For Listening: 'script' must be a natural 3-5 sentence dialogue or monologue about a specific topic from the lesson.\n"
             ."- For Reading: 'passage' must be a coherent paragraph about a specific animal or topic from the lesson.\n"
             ."- Questions must reference specific names, facts, places, or vocabulary from the lesson material.\n"
             ."- DO NOT use generic prompts like 'Write about Bahasa' or 'Which keyword best connects to the lesson'.\n"
@@ -82,16 +83,16 @@ final class LearningContentGenerator
             "Answer the 5W+1H questions to write a descriptive report on Indonesian fauna: Who is studying them? What characteristics do they share? Where are they found? Why are they endangered? How do we conserve them?",
         ];
         $speakingPrompts=[
-            "Describe the Bekantan (proboscis monkey): where does it live, what does it look like, and why is it endangered?",
-            "Explain what passive voice is and give one example using an animal from the lesson.",
-            "Why is it important to protect endemic animals like those in {$topic}? Give two reasons.",
-            "Imagine you are a wildlife photographer in Kalimantan. Describe what you see and what animals you observe.",
-            "Tell your classmate one interesting fact about Indonesian birds from the lesson.",
-            "Explain the difference between a report text and a descriptive text using an example from the lesson.",
-            "Describe the physical appearance of one animal from the lesson in as much detail as you can.",
-            "What threats do endemic animals in Indonesia face? Name at least two and explain their impact.",
-            "Retell the story of one animal from the lesson as if you observed it in the wild.",
-            "Why should Indonesian students care about protecting endemic animals? Share your opinion.",
+            "The bekantan lives in the mangrove forests of Kalimantan.",
+            "Cendrawasih is known for its bright ornamental feathers.",
+            "The maleo buries its eggs in the warm volcanic sand.",
+            "Illegal hunting and habitat loss threaten the survival of the Javan rhino.",
+            "The sumatran tiger has beautiful dark stripes on its body.",
+            "The flores hawk-eagle is one of the rarest raptors in Indonesia.",
+            "We must protect the helmeted hornbill from illegal trade.",
+            "Sangihe shrike-thrush is a critically endangered bird.",
+            "Mangrove forests protect the coastal area from erosion.",
+            "Indonesia is home to thousands of unique endemic species."
         ];
         $items=[];for($i=0;$i<$count;$i++){
             $key=ucfirst($words[$i%count($words)]);
@@ -174,7 +175,7 @@ final class LearningContentGenerator
         return 'Indonesian Endemic Animals';
     }
     private function passage(string $text,string $level,int $index): string{$words=preg_split('/\s+/u',$text,-1,PREG_SPLIT_NO_EMPTY)?:[];$target=(int)Level::profile($level)['length'];if(!$words)return 'English learning develops communication through meaningful context.';$start=($index*13)%count($words);$rotated=array_merge(array_slice($words,$start),array_slice($words,0,$start));return implode(' ',array_slice(array_merge($rotated,$rotated,$rotated),0,$target));}
-    private function instruction(string $skill,string $level): string{return match($skill){'reading'=>"Read the {$level} passage and choose the best answer.",'listening'=>"Play the Generated Listening Audio and answer before unlocking the transcript.",'speaking'=>'Record or type a transcript, review it, then request AI Speaking Feedback.','writing'=>"Write a {$level} response within the word-count limit."};}
+    private function instruction(string $skill,string $level): string{return match($skill){'reading'=>"Read the {$level} passage and choose the best answer.",'listening'=>"Play the Generated Listening Audio and answer before unlocking the transcript.",'speaking'=>'Read the following sentence aloud with clear pronunciation.','writing'=>"Write a {$level} response within the word-count limit."};}
     /** @param array<string,mixed> $item @return array<string,mixed> */
     private function validateItem(string $skill,string $level,array $item): array
     {

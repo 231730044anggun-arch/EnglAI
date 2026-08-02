@@ -88,7 +88,7 @@ check(str_contains($register, "if(\$role==='teacher'){header('Location: /admin/l
 $publicNav = substr($public, strpos($public, '<nav class="nav-links"'), strpos($public, '</nav>') - strpos($public, '<nav class="nav-links"'));
 check(!str_contains($publicNav, 'Play Now'), 'Play Now must not remain in the navbar.');
 $classroomPage = (string) file_get_contents($root . '/admin/classroom.php');
-foreach (['#lesson-plan', '#self-learning', '#live-quiz', '#students', '/assets/js/classroom-tabs.js'] as $tabMarker) {
+foreach (['#overview', '#lesson-plan', '#self-learning', '#live-quiz', '/assets/js/classroom-tabs.js'] as $tabMarker) {
     check(str_contains($classroomPage, $tabMarker), "Teacher classroom tab missing: {$tabMarker}");
 }
 $design = (string) file_get_contents($root . '/assets/css/design-system.css');

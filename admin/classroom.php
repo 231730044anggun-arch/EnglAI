@@ -53,6 +53,11 @@ $stmt = db()->prepare('SELECT id, state, question_count, difficulty, created_at 
 $stmt->execute([$id]);
 $quizzes = $stmt->fetchAll();
 
+// Fetch total ready self learning activities from learning_activities
+$stmt = db()->prepare("SELECT COUNT(*) FROM learning_activities WHERE classroom_id=? AND status='ready'");
+$stmt->execute([$id]);
+$selfLearningCount = (int)$stmt->fetchColumn();
+
 $analysis = [
     'topic' => $rpp ? pathinfo($rpp['original_name'], PATHINFO_FILENAME) : 'Belum tersedia',
     'objectives' => 'Menunggu RPP classroom',
@@ -69,7 +74,7 @@ if ($rpp) {
     $analysis['vocabulary'] = $words ? implode(', ', $words) : 'Menunggu analisis vocabulary';
 }
 
-$ready = (int)($banks['self_learning'] ?? 0) >= 20 && (int)($banks['live_quiz'] ?? 0) >= 20;
+$ready = $selfLearningCount >= 20 && (int)($banks['live_quiz'] ?? 0) >= 20;
 
 // Fetch AI RPP analysis recommendations
 $stmt = db()->prepare("SELECT * FROM ai_analyses WHERE classroom_id=? AND status='valid' ORDER BY id DESC LIMIT 1");
@@ -109,35 +114,45 @@ foreach ($skillStats as $st) {
     $classroomSkillStats[$st['skill']] = $st;
 }
 
-// Fetch recent student activities from attempts
+// Fetch student activities for the last 30 days
 $stmt = db()->prepare("
-    SELECT a.score, a.completed_at, l.title, l.skill, l.level, m.display_name, m.avatar 
+    SELECT 
+        ROUND(AVG(a.score)) as score, 
+        DATE(a.completed_at) as completed_date,
+        MAX(a.completed_at) as completed_at, 
+        CONCAT(UCASE(LEFT(l.skill, 1)), SUBSTRING(l.skill, 2), ' Practice') as title, 
+        l.skill, 
+        l.level, 
+        m.display_name, 
+        m.avatar,
+        COUNT(*) as activity_count
     FROM learning_attempts a 
     JOIN learning_activities l ON l.id = a.activity_id 
     JOIN classroom_members m ON m.id = a.member_id 
-    WHERE a.classroom_id = ? AND a.status = 'completed' 
-    ORDER BY a.completed_at DESC LIMIT 10
+    WHERE a.classroom_id = ? AND a.status = 'completed' AND a.completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    GROUP BY a.member_id, l.skill, l.level, DATE(a.completed_at)
+    
+    UNION ALL
+    
+    SELECT 
+        ROUND((r.score / (r.total_questions * 5)) * 100) as score, 
+        DATE(r.completed_at) as completed_date,
+        r.completed_at, 
+        'Reading Session' as title, 
+        'reading' as skill, 
+        r.level, 
+        m.display_name, 
+        m.avatar,
+        1 as activity_count
+    FROM reading_sessions r
+    JOIN classroom_members m ON m.id = r.member_id
+    WHERE r.classroom_id = ? AND r.status = 'completed' AND r.completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    
+    ORDER BY completed_at DESC
 ");
-$stmt->execute([$id]);
-$recentAttempts = $stmt->fetchAll();
-
-// Fetch recent student general practices
-$stmt = db()->prepare("
-    SELECT s.score, s.completed_at, 'Practice Quiz' as title, 'general' as skill, 'all' as level, m.display_name, m.avatar 
-    FROM student_learning_sessions s 
-    JOIN classroom_members m ON m.id = s.member_id 
-    WHERE s.classroom_id = ? AND s.status = 'completed' 
-    ORDER BY s.completed_at DESC LIMIT 10
-");
-$stmt->execute([$id]);
-$recentPractices = $stmt->fetchAll();
-
-// Combine and sort recent student activities
-$recentActivity = array_merge($recentAttempts, $recentPractices);
-usort($recentActivity, function($a, $b) {
-    return strcmp((string)($b['completed_at'] ?? ''), (string)($a['completed_at'] ?? ''));
-});
-$recentActivity = array_slice($recentActivity, 0, 10);
+$stmt->execute([$id, $id]);
+$allActivities = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$allActivitiesJson = json_encode($allActivities, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!doctype html>
 <html lang="id">
@@ -152,6 +167,163 @@ $recentActivity = array_slice($recentActivity, 0, 10);
         }
         .tab-panel.active {
             display: block;
+        }
+        /* Calendar UI Styles */
+        .calendar-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 24px;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) {
+            .calendar-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .calendar-widget {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 20px;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .calendar-header h3 {
+            font-size: 1rem;
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            color: #fff;
+            font-weight: 600;
+        }
+        .calendar-nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-grid;
+            place-items: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .calendar-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+        .calendar-day-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--muted);
+            padding: 4px 0;
+            text-transform: uppercase;
+        }
+        .calendar-cell {
+            aspect-ratio: 1;
+            display: grid;
+            place-items: center;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s, color 0.2s;
+            border: 1px solid transparent;
+        }
+        .calendar-cell:hover:not(.empty-cell) {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .calendar-cell.empty-cell {
+            cursor: default;
+        }
+        .calendar-cell.has-activity {
+            color: #fff;
+            font-weight: bold;
+            background: rgba(124, 58, 237, 0.12);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+        .calendar-cell.has-activity::after {
+            content: '';
+            position: absolute;
+            bottom: 6px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #ec4899;
+            box-shadow: 0 0 6px #ec4899;
+        }
+        .calendar-cell.selected {
+            background: linear-gradient(135deg, var(--purple), var(--indigo)) !important;
+            color: #fff !important;
+            border-color: transparent !important;
+            box-shadow: 0 0 14px rgba(124, 58, 237, 0.5);
+        }
+        .calendar-activities-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        .calendar-activities-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .calendar-activities-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 10px;
+        }
+        .view-all-link {
+            font-size: 0.8rem;
+            color: #a78bfa;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 4px 10px;
+            background: rgba(124, 58, 237, 0.1);
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
+        }
+        .view-all-link:hover {
+            background: rgba(124, 58, 237, 0.2);
+            color: #c4b5fd;
+        }
+        .activity-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            gap: 12px;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .activity-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-1px);
         }
     </style>
 </head>
@@ -191,7 +363,6 @@ $recentActivity = array_slice($recentActivity, 0, 10);
             <a href="#lesson-plan">Lesson Plan</a>
             <a href="#self-learning">Self Learning</a>
             <a href="#live-quiz">Live Quiz</a>
-            <a href="#students">Students</a>
             <a href="/admin/analytics.php?classroom_id=<?= $id ?>">Analytics</a>
             <a href="/admin/settings.php?classroom_id=<?= $id ?>">Settings</a>
         </nav>
@@ -209,7 +380,7 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                 <article class="card metric">
                     <div class="icon-box">📚</div>
                     <div>
-                        <div class="stat"><?= (int)($banks['self_learning'] ?? 0) ?></div>
+                        <div class="stat"><?= $selfLearningCount ?></div>
                         <span class="muted">Self Learning</span>
                     </div>
                 </article>
@@ -229,78 +400,102 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                 </article>
             </section>
 
-            <section class="grid two" style="margin-top: 22px;">
-                <article class="card">
-                    <h2>Classroom Skill Proficiency</h2>
-                    <p class="muted">Rata-rata akurasi nilai siswa di kelas ini untuk masing-masing skill:</p>
-                    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
-                        <?php 
-                        $skillIcons = ['reading' => '📖', 'listening' => '🎧', 'speaking' => '🎙️', 'writing' => '✍️'];
-                        $skillsToTest = ['reading', 'listening', 'speaking', 'writing'];
-                        foreach ($skillsToTest as $sk): 
-                            $prog = $classroomSkillStats[$sk] ?? null;
-                            $score = $prog ? (float)$prog['average_score'] : 0.0;
-                            $attempts = $prog ? (int)$prog['attempts'] : 0;
-                        ?>
-                            <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem;">
-                                    <span style="font-weight: bold;"><?= $skillIcons[$sk] ?> <?= ucfirst($sk) ?> <span class="muted" style="font-weight: normal; font-size: 0.8rem;">(<?= $attempts ?> pengerjaan)</span></span>
-                                    <b style="color: <?= $score >= 80 ? '#10b981' : ($score >= 50 ? '#3b82f6' : '#ef4444') ?>"><?= number_format($score, 1) ?>%</b>
-                                </div>
-                                <div class="progress-track" style="margin: 0; height: 10px; background: rgba(255,255,255,0.06); border-radius: 99px;">
-                                    <div class="progress-fill" style="width: <?= $score ?>%; height: 100%; border-radius: 99px; background: <?= $score >= 80 ? 'linear-gradient(90deg, #10b981, #34d399)' : ($score >= 50 ? 'linear-gradient(90deg, #3b82f6, #60a5fa)' : 'linear-gradient(90deg, #ef4444, #f87171)') ?>;"></div>
-                                </div>
+            <section class="card" style="margin-top: 22px;">
+                <h2>Classroom Skill Proficiency</h2>
+                <p class="muted">Rata-rata akurasi nilai siswa di kelas ini untuk masing-masing skill:</p>
+                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+                    <?php 
+                    $skillIcons = ['reading' => '📖', 'listening' => '🎧', 'speaking' => '🎙️', 'writing' => '✍️'];
+                    $skillsToTest = ['reading', 'listening', 'speaking', 'writing'];
+                    foreach ($skillsToTest as $sk): 
+                        $prog = $classroomSkillStats[$sk] ?? null;
+                        $score = $prog ? (float)$prog['average_score'] : 0.0;
+                        $attempts = $prog ? (int)$prog['attempts'] : 0;
+                    ?>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem;">
+                                <span style="font-weight: bold;"><?= $skillIcons[$sk] ?> <?= ucfirst($sk) ?> <span class="muted" style="font-weight: normal; font-size: 0.8rem;">(<?= $attempts ?> pengerjaan)</span></span>
+                                <b style="color: <?= $score >= 80 ? '#10b981' : ($score >= 50 ? '#3b82f6' : '#ef4444') ?>"><?= number_format($score, 1) ?>%</b>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-                </article>
-
-                <article class="card">
-                    <h2>Recent Student Activities</h2>
-                    <p class="muted">10 aktivitas belajar terakhir yang diselesaikan oleh siswa:</p>
-                    <?php if (empty($recentActivity)): ?>
-                        <div class="empty" style="margin-top: 15px;">Belum ada aktivitas siswa yang selesai.</div>
-                    <?php else: ?>
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-                            <?php foreach ($recentActivity as $act): 
-                                $studAvatar = $act['avatar'] ?: 'a.jpg';
-                                if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $studAvatar)) {
-                                    $studAvatar = 'a.jpg';
-                                }
-                                $score = (int)$act['score'];
-                                $scoreColor = $score >= 80 ? '#10b981' : ($score >= 50 ? '#3b82f6' : '#ef4444');
-                                $timeStr = '';
-                                if (!empty($act['completed_at'])) {
-                                    $dt = new DateTime($act['completed_at']);
-                                    $timeStr = $dt->format('H:i · d M');
-                                }
-                            ?>
-                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; gap: 12px;">
-                                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-                                        <img src="/assets/images/avatars/<?= htmlspecialchars($studAvatar) ?>" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);">
-                                        <div style="min-width: 0; line-height: 1.3;">
-                                            <div style="font-weight: bold; font-size: 0.9rem; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                                                <?= classroom_h($act['display_name'] ?? null, 'Joined Student') ?>
-                                            </div>
-                                            <div style="font-size: 0.75rem; color: var(--muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                                                <?= ($act['title'] ?? '') === 'Practice Quiz' ? 'Self Learning Practice' : classroom_h($act['title'] ?? null, 'Learning Activity') ?>
-                                                <span style="opacity: 0.5;">·</span> <?= ucfirst(classroom_h($act['skill'] ?? null, 'general')) ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0; text-align: right;">
-                                        <div style="font-size: 0.7rem; color: var(--muted);">
-                                            <?= htmlspecialchars($timeStr) ?>
-                                        </div>
-                                        <span style="font-family: monospace; font-size: 0.85rem; font-weight: bold; background: <?= $scoreColor ?>15; color: <?= $scoreColor ?>; border: 1px solid <?= $scoreColor ?>30; padding: 2px 8px; border-radius: 6px;">
-                                            <?= $score ?>/100
-                                        </span>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                            <div class="progress-track" style="margin: 0; height: 10px; background: rgba(255,255,255,0.06); border-radius: 99px;">
+                                <div class="progress-fill" style="width: <?= $score ?>%; height: 100%; border-radius: 99px; background: <?= $score >= 80 ? 'linear-gradient(90deg, #10b981, #34d399)' : ($score >= 50 ? 'linear-gradient(90deg, #3b82f6, #60a5fa)' : 'linear-gradient(90deg, #ef4444, #f87171)') ?>;"></div>
+                            </div>
                         </div>
-                    <?php endif; ?>
-                </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <section class="card" style="margin-top: 22px;">
+                <h2>Activity Calendar & Logs</h2>
+                <p class="muted">Pilih tanggal pada kalender di bawah untuk melihat detail aktivitas siswa dalam 30 hari terakhir:</p>
+                
+                <div class="calendar-container">
+                    <!-- Calendar Widget -->
+                    <div id="calendar-widget-container"></div>
+                    
+                    <!-- Activities Panel -->
+                    <div class="calendar-activities-panel">
+                        <h4 class="calendar-activities-title">
+                            <span id="calendar-activities-title-text">Aktivitas Hari Ini</span>
+                            <span class="view-all-link" onclick="displayActivities('all')">Lihat Semua</span>
+                        </h4>
+                        <div id="calendar-activities-list" class="calendar-activities-list">
+                            <div class="empty">Pilih tanggal pada kalender.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="students" style="margin-top: 22px;">
+                <div class="row" style="justify-content:space-between">
+                    <h2>Students</h2>
+                    <span class="status"><?= count($members) ?> membership records</span>
+                </div>
+                <?php if (!$members): ?>
+                    <div class="empty">Bagikan Classroom ID agar Student dapat bergabung.</div>
+                <?php else: ?>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Avatar</th>
+                                <th class="text-center">Status</th>
+                                <th>Last seen</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($members as $m): 
+                                $memberAvatar = $m['avatar'] ?: 'a.jpg';
+                                if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $memberAvatar)) {
+                                    $memberAvatar = 'a.jpg';
+                                }
+                                $status = $m['membership_status'] ?? 'active';
+                            ?>
+                                <tr>
+                                    <td><?= classroom_h($m['display_name'] ?? null, 'Joined Student') ?></td>
+                                    <td>
+                                        <img src="/assets/images/avatars/<?= htmlspecialchars($memberAvatar) ?>" alt="Avatar" width="40" height="40" style="border-radius:50%; background:#2b2b36; border:1px solid rgba(255,255,255,0.2); vertical-align:middle; object-fit:cover;">
+                                    </td>
+                                    <td class="text-center"><span class="badge <?= $status==='active'?'available':($status==='pending'?'dev':'danger') ?>"><?= classroom_h($status, 'active') ?></span></td>
+                                    <td><?= classroom_h($m['last_seen_at'] ?? $m['created_at'] ?? null, '-') ?></td>
+                                    <td class="text-right">
+                                        <form method="post" action="/admin/membership_action.php" class="row" style="justify-content: flex-end;">
+                                            <?= Csrf::field() ?>
+                                            <input type="hidden" name="classroom_id" value="<?= $id ?>">
+                                            <input type="hidden" name="member_id" value="<?= (int)$m['id'] ?>">
+                                            <?php if ($status === 'pending'): ?>
+                                                <button class="button secondary" name="action" value="approve">Approve</button>
+                                            <?php endif; ?>
+                                            <button class="button secondary" name="action" value="remove">Remove</button>
+                                            <button class="button secondary" name="action" value="block">Block</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
             </section>
         </div>
 
@@ -511,63 +706,294 @@ $recentActivity = array_slice($recentActivity, 0, 10);
             </section>
         </div>
 
-        <!-- TAB: STUDENTS -->
-        <div id="tab-students" class="tab-panel">
-            <section class="card" id="students" style="margin-top: 0;">
-                <div class="row" style="justify-content:space-between">
-                    <h2>Students</h2>
-                    <span class="status"><?= count($members) ?> membership records</span>
-                </div>
-                <?php if (!$members): ?>
-                    <div class="empty">Bagikan Classroom ID agar Student dapat bergabung.</div>
-                <?php else: ?>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Student</th>
-                                <th>Avatar</th>
-                                <th>Status</th>
-                                <th>Last seen</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($members as $m): 
-                                $memberAvatar = $m['avatar'] ?: 'a.jpg';
-                                if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $memberAvatar)) {
-                                    $memberAvatar = 'a.jpg';
-                                }
-                            ?>
-                                <tr>
-                                    <td><?= classroom_h($m['display_name'] ?? null, 'Joined Student') ?></td>
-                                    <td>
-                                        <img src="/assets/images/avatars/<?= htmlspecialchars($memberAvatar) ?>" alt="Avatar" width="40" height="40" style="border-radius:50%; background:#2b2b36; border:1px solid rgba(255,255,255,0.2); vertical-align:middle; object-fit:cover;">
-                                    </td>
-                                    <td><span class="badge"><?= classroom_h($m['membership_status'] ?? null, 'active') ?></span></td>
-                                    <td><?= classroom_h($m['last_seen_at'] ?? $m['created_at'] ?? null, '-') ?></td>
-                                    <td>
-                                        <form method="post" action="/admin/membership_action.php" class="row">
-                                            <?= Csrf::field() ?>
-                                            <input type="hidden" name="classroom_id" value="<?= $id ?>">
-                                            <input type="hidden" name="member_id" value="<?= (int)$m['id'] ?>">
-                                            <?php if (($m['membership_status'] ?? 'active') === 'pending'): ?>
-                                                <button class="button secondary" name="action" value="approve">Approve</button>
-                                            <?php endif; ?>
-                                            <button class="button secondary" name="action" value="remove">Remove</button>
-                                            <button class="button secondary" name="action" value="block">Block</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endif; ?>
-            </section>
-        </div>
+
     </main>
 
     <script src="/assets/js/visual-effects.js" defer></script>
     <script src="/assets/js/teacher.js" defer></script>
     <script src="/assets/js/classroom-tabs.js" defer></script>
+    <script>
+        const classroomActivities = <?= $allActivitiesJson ?>;
+
+        class ClassroomCalendar {
+            constructor(containerId, activities, onDateSelected) {
+                this.container = document.getElementById(containerId);
+                this.activities = activities;
+                this.onDateSelected = onDateSelected;
+                
+                const today = new Date();
+                this.year = today.getFullYear();
+                this.month = today.getMonth(); // 0-11
+                
+                if (this.activities.length > 0) {
+                    const latestDateStr = this.activities[0].completed_date;
+                    const parts = latestDateStr.split('-');
+                    this.selectedDateStr = latestDateStr;
+                    this.year = parseInt(parts[0]);
+                    this.month = parseInt(parts[1]) - 1;
+                } else {
+                    this.selectedDateStr = `${this.year}-${String(this.month + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                }
+                
+                this.init();
+            }
+            
+            init() {
+                this.render();
+            }
+            
+            prevMonth() {
+                if (this.month === 0) {
+                    this.month = 11;
+                    this.year--;
+                } else {
+                    this.month--;
+                }
+                this.render();
+            }
+            
+            nextMonth() {
+                if (this.month === 11) {
+                    this.month = 0;
+                    this.year++;
+                } else {
+                    this.month++;
+                }
+                this.render();
+            }
+            
+            selectDate(dateStr) {
+                this.selectedDateStr = dateStr;
+                this.render();
+                if (this.onDateSelected) {
+                    this.onDateSelected(dateStr);
+                }
+            }
+            
+            render() {
+                const monthNames = [
+                    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+                ];
+                
+                const firstDay = new Date(this.year, this.month, 1).getDay();
+                const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
+                
+                this.container.textContent = '';
+                
+                const widget = document.createElement('div');
+                widget.className = 'calendar-widget';
+                
+                const header = document.createElement('div');
+                header.className = 'calendar-header';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.type = 'button';
+                prevBtn.className = 'calendar-nav-btn';
+                prevBtn.textContent = '<';
+                prevBtn.addEventListener('click', () => this.prevMonth());
+                
+                const title = document.createElement('h3');
+                title.textContent = `${monthNames[this.month]} ${this.year}`;
+                
+                const nextBtn = document.createElement('button');
+                nextBtn.type = 'button';
+                nextBtn.className = 'calendar-nav-btn';
+                nextBtn.textContent = '>';
+                nextBtn.addEventListener('click', () => this.nextMonth());
+                
+                header.appendChild(prevBtn);
+                header.appendChild(title);
+                header.appendChild(nextBtn);
+                widget.appendChild(header);
+                
+                const grid = document.createElement('div');
+                grid.className = 'calendar-grid';
+                
+                const dayLabels = ["Mg", "Sn", "Sl", "Rb", "Km", "Jm", "Sb"];
+                dayLabels.forEach(d => {
+                    const label = document.createElement('div');
+                    label.className = 'calendar-day-label';
+                    label.textContent = d;
+                    grid.appendChild(label);
+                });
+                
+                for (let i = 0; i < firstDay; i++) {
+                    const emptyCell = document.createElement('div');
+                    emptyCell.className = 'calendar-cell empty-cell';
+                    grid.appendChild(emptyCell);
+                }
+                
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${this.year}-${String(this.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const hasActivity = this.activities.some(act => act.completed_date === dateStr);
+                    const isSelected = this.selectedDateStr === dateStr;
+                    
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-cell';
+                    cell.textContent = day;
+                    
+                    if (hasActivity) cell.classList.add('has-activity');
+                    if (isSelected) cell.classList.add('selected');
+                    
+                    cell.addEventListener('click', () => this.selectDate(dateStr));
+                    grid.appendChild(cell);
+                }
+                
+                widget.appendChild(grid);
+                this.container.appendChild(widget);
+            }
+        }
+
+        function displayActivities(dateStr) {
+            const listContainer = document.getElementById('calendar-activities-list');
+            const titleContainer = document.getElementById('calendar-activities-title-text');
+            
+            let filtered = [];
+            let title = "Aktivitas Hari Ini";
+            
+            if (dateStr === 'all') {
+                filtered = classroomActivities.slice(0, 10);
+                title = "Aktivitas Terbaru";
+                document.querySelectorAll('.calendar-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                if (window.clsCalendar) {
+                    window.clsCalendar.selectedDateStr = '';
+                }
+            } else {
+                filtered = classroomActivities.filter(act => act.completed_date === dateStr);
+                const parts = dateStr.split('-');
+                const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                const options = { day: 'numeric', month: 'short', year: 'numeric' };
+                title = date.toLocaleDateString('id-ID', options);
+            }
+            
+            titleContainer.textContent = title;
+            listContainer.textContent = '';
+            
+            if (filtered.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'empty';
+                empty.textContent = 'Tidak ada aktivitas pada tanggal ini.';
+                listContainer.appendChild(empty);
+                return;
+            }
+            
+            filtered.forEach(act => {
+                let studAvatar = act.avatar || 'a.jpg';
+                if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(studAvatar)) {
+                    studAvatar = 'a.jpg';
+                }
+                const score = parseInt(act.score);
+                const scoreColor = score >= 80 ? '#10b981' : (score >= 50 ? '#3b82f6' : '#ef4444');
+                
+                const completedAt = new Date(act.completed_at);
+                const timeStr = String(completedAt.getHours()).padStart(2, '0') + ':' + String(completedAt.getMinutes()).padStart(2, '0');
+                
+                let actTitle = act.title === 'Practice Quiz' ? 'Self Learning Practice' : act.title;
+                if (parseInt(act.activity_count) > 1) {
+                    actTitle += ` (${act.activity_count} soal)`;
+                }
+                
+                const skillCapitalized = act.skill.charAt(0).toUpperCase() + act.skill.slice(1);
+                const levelCapitalized = act.level.charAt(0).toUpperCase() + act.level.slice(1);
+                
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.justifyContent = 'space-between';
+                row.style.padding = '8px 12px';
+                row.style.background = 'rgba(255,255,255,0.02)';
+                row.style.border = '1px solid rgba(255,255,255,0.05)';
+                row.style.borderRadius = '12px';
+                row.style.gap = '12px';
+                
+                const left = document.createElement('div');
+                left.style.display = 'flex';
+                left.style.alignItems = 'center';
+                left.style.gap = '10px';
+                left.style.minWidth = '0';
+                left.style.flex = '1';
+                
+                const img = document.createElement('img');
+                img.src = '/assets/images/avatars/' + studAvatar;
+                img.alt = 'Avatar';
+                img.style.width = '32px';
+                img.style.height = '32px';
+                img.style.borderRadius = '50%';
+                img.style.objectFit = 'cover';
+                img.style.flexShrink = '0';
+                img.style.border = '1px solid rgba(255,255,255,0.1)';
+                
+                const textCol = document.createElement('div');
+                textCol.style.minWidth = '0';
+                textCol.style.lineHeight = '1.3';
+                
+                const name = document.createElement('div');
+                name.style.fontWeight = 'bold';
+                name.style.fontSize = '0.9rem';
+                name.style.color = '#fff';
+                name.style.textOverflow = 'ellipsis';
+                name.style.overflow = 'hidden';
+                name.style.whiteSpace = 'nowrap';
+                name.textContent = act.display_name;
+                
+                const meta = document.createElement('div');
+                meta.style.fontSize = '0.75rem';
+                meta.style.color = 'var(--muted)';
+                meta.style.textOverflow = 'ellipsis';
+                meta.style.overflow = 'hidden';
+                meta.style.whiteSpace = 'nowrap';
+                meta.textContent = `${actTitle} · ${skillCapitalized} (${levelCapitalized})`;
+                
+                textCol.appendChild(name);
+                textCol.appendChild(meta);
+                left.appendChild(img);
+                left.appendChild(textCol);
+                
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.alignItems = 'center';
+                right.style.gap = '12px';
+                right.style.flexShrink = '0';
+                right.style.textAlign = 'right';
+                
+                const time = document.createElement('div');
+                time.style.fontSize = '0.7rem';
+                time.style.color = 'var(--muted)';
+                time.textContent = timeStr;
+                
+                const badge = document.createElement('span');
+                badge.style.fontFamily = 'monospace';
+                badge.style.fontSize = '0.85rem';
+                badge.style.fontWeight = 'bold';
+                badge.style.background = scoreColor + '15';
+                badge.style.color = scoreColor;
+                badge.style.border = '1px solid ' + scoreColor + '30';
+                badge.style.padding = '2px 8px';
+                badge.style.borderRadius = '6px';
+                badge.textContent = `${score}/100`;
+                
+                right.appendChild(time);
+                right.appendChild(badge);
+                
+                row.appendChild(left);
+                row.appendChild(right);
+                
+                listContainer.appendChild(row);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.clsCalendar = new ClassroomCalendar('calendar-widget-container', classroomActivities, (dateStr) => {
+                displayActivities(dateStr);
+            });
+            
+            if (window.clsCalendar.selectedDateStr) {
+                displayActivities(window.clsCalendar.selectedDateStr);
+            } else {
+                displayActivities('all');
+            }
+        });
+    </script>
 </body>
 </html>

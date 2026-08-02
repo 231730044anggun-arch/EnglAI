@@ -158,15 +158,14 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
-- For each item, the prompt must reference a SPECIFIC topic, animal, person, or activity from the RPP.
-- Create engaging scenarios (e.g. describing a rare bird, explaining a grammar point, roleplaying a tourist).
+- The prompt MUST be a specific English sentence of 8-15 words based on the RPP lesson content for the student to read aloud. Do NOT make it a question.
 - Return a JSON array of objects only.
 
 Respond ONLY with a valid JSON array, no markdown fences:
 [
   {
-    "prompt": "specific speaking task prompt referencing RPP content",
-    "scenario": "brief context (1 sentence) for the student",
+    "prompt": "The specific English sentence to be read aloud, grounded in the lesson plan",
+    "scenario": "Read the sentence aloud with clear pronunciation.",
     "keywords": ["keyword1", "keyword2", "keyword3"],
     "minimum_words": {$minWords},
     "response_duration": {$duration}

@@ -413,10 +413,10 @@ final class LiveQuizBankGenerator
 
         if ($skill === 'speaking') {
             $prompts = [
-                "Describe the appearance and habitat of the {$animal} based on the lesson.",
-                "Imagine you are Galang. Share one interesting fact about the {$animal} that you learned.",
-                "Explain why the {$animal} is endangered and suggest one simple action to protect them.",
-                "What is the main difference between the {$animal} and other local fauna? Explain in detail.",
+                "The {$animal} is an endemic species that needs strict habitat protection.",
+                "Galang likes to observe the unique behaviour of the {$animal}.",
+                "Many people work hard to prevent the extinction of the {$animal}.",
+                "The {$animal} plays a vital role in maintaining the balance of the forest.",
             ];
             $prompt = $prompts[($n - 1) % 4];
 
@@ -427,8 +427,8 @@ final class LiveQuizBankGenerator
                 'answer'  => null,
                 'rubric'  => ['relevance', 'task_completion', 'grammar', 'vocabulary', 'completeness', 'clarity_based_on_transcription'],
                 'content' => $common + [
-                    'scenario'          => "You are sharing a short presentation about {$animal}.",
-                    'instruction'       => 'AI Speaking Feedback evaluates transcription, not pronunciation.',
+                    'scenario'          => "Read the sentence aloud with clear pronunciation.",
+                    'instruction'       => "Read the sentence aloud with clear pronunciation.",
                     'prompt'            => $prompt,
                     'keywords'          => [$animal, 'endemic', 'habitat', 'forest', 'threat'],
                     'minimum_words'     => $level === 'basic' ? 8 : 15,
