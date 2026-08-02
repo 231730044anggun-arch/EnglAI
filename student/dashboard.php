@@ -184,17 +184,22 @@ $skillDescriptions = [
 ];
 
 // Fetch up to 10 recent activities from attempts
-$stmt = $pdo->prepare("SELECT 'activity' as type, a.score, a.completed_at, l.title, l.skill, l.level FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.member_id=? AND a.status='completed' ORDER BY a.completed_at DESC LIMIT 10");
+$stmt = $pdo->prepare("SELECT 'activity' as type, a.id as attempt_id, NULL as reading_session_id, a.score, a.completed_at, l.title, l.skill, l.level FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.member_id=? AND a.status='completed' ORDER BY a.completed_at DESC LIMIT 10");
 $stmt->execute([(int)$member['id']]);
 $hist1 = $stmt->fetchAll();
 
-// Fetch up to 10 recent practice sessions
-$stmt = $pdo->prepare("SELECT 'practice' as type, score, completed_at, 'Practice Quiz' as title, 'general' as skill, 'all' as level FROM student_learning_sessions WHERE member_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+// Fetch up to 10 recent Reading sessions
+$stmt = $pdo->prepare("SELECT 'reading_session' as type, NULL as attempt_id, id as reading_session_id, ROUND((score / (total_questions * 5)) * 100) as score, completed_at, CONCAT('Reading Practice ', UPPER(level)) as title, 'reading' as skill, level FROM reading_sessions WHERE member_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+$stmt->execute([(int)$member['id']]);
+$hist3 = $stmt->fetchAll();
+
+// Fetch up to 10 recent practice sessions (legacy)
+$stmt = $pdo->prepare("SELECT 'practice' as type, NULL as attempt_id, NULL as reading_session_id, score, completed_at, 'Practice Quiz' as title, 'general' as skill, 'all' as level FROM student_learning_sessions WHERE member_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
 $stmt->execute([(int)$member['id']]);
 $hist2 = $stmt->fetchAll();
 
 // Combine and sort history logs
-$history = array_merge($hist1, $hist2);
+$history = array_merge($hist1, $hist3, $hist2);
 usort($history, function($a, $b) {
     return strcmp($b['completed_at'], $a['completed_at']);
 });
@@ -229,6 +234,199 @@ $history = array_slice($history, 0, 10);
         @keyframes pulse-border {
             0% { box-shadow: 0 4px 15px rgba(255, 159, 28, 0.4); }
             100% { box-shadow: 0 4px 25px rgba(255, 107, 107, 0.7); }
+        }
+        .history-item {
+            transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+        }
+        .history-item:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.04) !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+        }
+        /* Modal Styling */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 10000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(7, 7, 26, 0.85); 
+            backdrop-filter: blur(8px);
+        }
+        .modal-content {
+            background: #0f1035; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            margin: 5% auto; 
+            padding: 32px; 
+            width: min(800px, 95%); 
+            border-radius: 24px; 
+            position: relative; 
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .close {
+            position: absolute; 
+            right: 24px; 
+            top: 24px; 
+            background: rgba(255, 255, 255, 0.05); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            color: #94a3b8; 
+            font-size: 20px; 
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .close:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        .modal-body {
+            max-height: 70vh; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 16px; 
+            padding-right: 8px;
+            margin-top: 16px;
+        }
+        .attempt-detail-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+        .attempt-detail-item:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .detail-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0;
+            color: #fff;
+        }
+        .detail-badge-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .detail-section {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .detail-section-title {
+            font-size: 0.85rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .option-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .option-item {
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+        .option-item.correct {
+            background: rgba(52, 211, 153, 0.08);
+            border-color: rgba(52, 211, 153, 0.3);
+            color: #34d399;
+        }
+        .option-item.incorrect {
+            background: rgba(248, 113, 113, 0.08);
+            border-color: rgba(248, 113, 113, 0.3);
+            color: #f87171;
+        }
+        .option-letter {
+            font-weight: 800;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            display: grid;
+            place-items: center;
+            font-size: 0.8rem;
+        }
+        .option-item.correct .option-letter {
+            background: #34d399;
+            color: #07071a;
+        }
+        .option-item.incorrect .option-letter {
+            background: #f87171;
+            color: #fff;
+        }
+        .explanation-box {
+            background: rgba(124, 58, 237, 0.05);
+            border: 1px dashed rgba(124, 58, 237, 0.2);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-top: 10px;
+            font-size: 0.88rem;
+        }
+        .collapsible-trigger {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+        .collapsible-trigger:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .collapsible-content {
+            display: none;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .collapsible-content p {
+            margin: 0;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -336,7 +534,17 @@ $history = array_slice($history, 0, 10);
                             
                             $title = $h['type'] === 'practice' ? 'Self Learning Practice' : student_h($h['title'] ?? null, 'Learning Activity');
                         ?>
-                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; gap: 16px; transition: transform 0.2s ease, background 0.2s ease;">
+                            <?php 
+                            $isClickable = in_array($h['type'], ['activity', 'reading_session'], true);
+                            $clickableClass = $isClickable ? 'btn-view-history-detail' : '';
+                            $clickableStyle = $isClickable ? 'cursor: pointer;' : '';
+                            ?>
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; gap: 16px; transition: transform 0.2s ease, background 0.2s ease; <?= $clickableStyle ?>" 
+                                 class="history-item <?= $clickableClass ?>"
+                                 data-type="<?= $h['type'] ?>"
+                                 data-attempt-id="<?= $h['attempt_id'] ?? '' ?>"
+                                 data-reading-session-id="<?= $h['reading_session_id'] ?? '' ?>"
+                                 data-title="<?= student_h($title) ?>">
                                 <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
                                     <div style="font-size: 1.4rem; width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
                                         <?= $skillIcon ?>
@@ -347,6 +555,9 @@ $history = array_slice($history, 0, 10);
                                             <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.72rem; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.03em;"><?= ucfirst($skill) ?></span>
                                             <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.72rem; padding: 2px 8px; text-transform: capitalize;"><?= student_h($h['level'] ?? null, '-') ?></span>
                                             <span style="font-size: 0.78rem; color: rgba(255,255,255,0.4);"><?= date('d M Y, H:i', strtotime((string)$h['completed_at'])) ?></span>
+                                            <?php if ($isClickable): ?>
+                                                <span style="font-size: 0.72rem; color: #a78bfa; font-weight: bold; background: rgba(167,139,250,0.1); padding: 1px 6px; border-radius: 4px;">Lihat Detail</span>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -497,6 +708,18 @@ $history = array_slice($history, 0, 10);
         </div>
     </main>
 
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal">
+        <div class="modal-content card">
+            <button type="button" class="close" id="close-modal" aria-label="Close">&times;</button>
+            <span class="eyebrow" id="modal-eyebrow">Detail Latihan Mandiri</span>
+            <h2 id="modal-title" style="margin: 4px 0 20px 0;">Skill &amp; Level</h2>
+            <div id="modal-body" class="modal-body">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+    </div>
+
     <script src="/assets/js/visual-effects.js" defer></script>
     <script>
         function switchStudentTab(tabId, event) {
@@ -543,6 +766,287 @@ $history = array_slice($history, 0, 10);
                 }
             }
             switchStudentTab(activeTab);
+
+            // Modal Logic
+            const modal = document.getElementById("detail-modal");
+            const closeModal = document.getElementById("close-modal");
+            const modalTitle = document.getElementById("modal-title");
+            const modalBody = document.getElementById("modal-body");
+
+            if (modal && closeModal) {
+                closeModal.addEventListener("click", () => {
+                    modal.style.display = "none";
+                });
+
+                window.addEventListener("click", (e) => {
+                    if (e.target === modal) {
+                        modal.style.display = "none";
+                    }
+                });
+            }
+
+            function el(tag, attrs = {}, children = []) {
+                const element = document.createElement(tag);
+                for (const [key, val] of Object.entries(attrs)) {
+                    if (key === 'style' && typeof val === 'object') {
+                        Object.assign(element.style, val);
+                    } else if (key === 'className') {
+                        element.className = val;
+                    } else if (key.startsWith('data-')) {
+                        element.setAttribute(key, val);
+                    } else {
+                        element[key] = val;
+                    }
+                }
+                children.forEach(child => {
+                    if (typeof child === 'string' || typeof child === 'number') {
+                        element.appendChild(document.createTextNode(String(child)));
+                    } else if (child instanceof HTMLElement) {
+                        element.appendChild(child);
+                    }
+                });
+                return element;
+            }
+
+            document.querySelectorAll(".btn-view-history-detail").forEach(card => {
+                card.addEventListener("click", function() {
+                    const type = this.dataset.type;
+                    const attemptId = this.dataset.attemptId;
+                    const readingSessionId = this.dataset.readingSessionId;
+                    const titleText = this.dataset.title;
+
+                    modalTitle.textContent = titleText || "Detail Latihan";
+                    modalBody.replaceChildren(
+                        el('div', { style: { textAlign: 'center', padding: '40px 0' } }, [
+                            el('span', { style: { display: 'inline-block', width: '30px', height: '30px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '10px' } }),
+                            el('p', { className: 'muted' }, ['Loading details...'])
+                        ])
+                    );
+                    modal.style.display = "block";
+
+                    let url = '';
+                    if (type === 'reading_session') {
+                        url = `/student/progress_detail.php?reading_session_id=${readingSessionId}`;
+                    } else {
+                        url = `/student/progress_detail.php?attempt_id=${attemptId}`;
+                    }
+
+                    fetch(url)
+                        .then(res => {
+                            if (!res.ok) throw new Error("Gagal mengambil data.");
+                            return res.json();
+                        })
+                        .then(data => {
+                            if (!data.success || !data.attempts || data.attempts.length === 0) {
+                                modalBody.replaceChildren(el('div', { className: 'empty' }, ['Tidak ada detail pengerjaan yang tersedia.']));
+                                return;
+                            }
+
+                            const fragment = document.createDocumentFragment();
+                            data.attempts.forEach((a, index) => {
+                                const scoreColor = a.score >= 70 ? '#34d399' : '#f87171';
+                                const isObjective = ['reading', 'listening'].includes(a.skill);
+                                
+                                const itemEl = el('div', { className: 'attempt-detail-item' }, [
+                                    el('div', { className: 'detail-header' }, [
+                                        el('h4', { className: 'detail-title' }, [`${a.title || 'Latihan'}`]),
+                                        el('div', { className: 'detail-badge-group' }, [
+                                            el('span', { className: 'badge', style: { color: scoreColor, borderColor: scoreColor + '50', background: scoreColor + '08', fontWeight: 'bold', fontSize: '0.85rem' } }, [`Score: ${a.score}/100`])
+                                        ])
+                                    ])
+                                ]);
+
+                                if (a.instruction) {
+                                    itemEl.appendChild(el('p', { className: 'muted', style: { fontSize: '0.85rem', margin: '-4px 0 10px 0' } }, [
+                                        el('i', {}, [`Instruction: ${a.instruction}`])
+                                    ]));
+                                }
+
+                                function addCollapsible(titleText, contentText) {
+                                    const btn = el('button', { type: 'button', className: 'collapsible-trigger' }, [titleText]);
+                                    const content = el('div', { className: 'collapsible-content' });
+                                    
+                                    contentText.split('\n').forEach(line => {
+                                        content.appendChild(el('p', {}, [line]));
+                                    });
+
+                                    btn.addEventListener('click', function() {
+                                        if (content.style.display === 'block') {
+                                            content.style.display = 'none';
+                                            btn.textContent = titleText.replace("Hide", "Show");
+                                        } else {
+                                            content.style.display = 'block';
+                                            btn.textContent = titleText.replace("Show", "Hide");
+                                        }
+                                    });
+                                    itemEl.appendChild(btn);
+                                    itemEl.appendChild(content);
+                                }
+
+                                const passage = a.question_data.passage;
+                                if (passage) {
+                                    addCollapsible('📖 Show Passage / Context', passage);
+                                }
+                                const transcript = a.question_data.transcript;
+                                if (a.skill === 'listening' && transcript) {
+                                    addCollapsible('🎧 Show Listening Script / Transcript', transcript);
+                                }
+                                const scenario = a.question_data.scenario;
+                                if (a.skill === 'speaking' && scenario) {
+                                    addCollapsible('🎤 Show Speaking Scenario', scenario);
+                                }
+                                const context = a.question_data.context;
+                                if (a.skill === 'writing' && context) {
+                                    addCollapsible('✍️ Show Writing Context', context);
+                                }
+
+                                if (a.question_data.question) {
+                                    itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                        el('div', { className: 'detail-section-title' }, ['Question / Prompt']),
+                                        el('p', { style: { fontWeight: '600', margin: '4px 0 0 0', color: '#fff', fontSize: '0.95rem' } }, [a.question_data.question])
+                                    ]));
+                                }
+
+                                if (isObjective && a.question_data.options && a.answer_json) {
+                                    const selectedLetter = a.answer_json.selected;
+                                    const correctLetter = a.answer_json.correct_answer;
+                                    
+                                    const optionChildren = [];
+                                    a.question_data.options.forEach((optText, optIdx) => {
+                                        const letter = String.fromCharCode(65 + optIdx);
+                                        let optClass = '';
+                                        if (letter === correctLetter) {
+                                            optClass = 'correct';
+                                        } else if (letter === selectedLetter) {
+                                            optClass = 'incorrect';
+                                        }
+                                        
+                                        const labelChilds = [optText];
+                                        if (letter === selectedLetter) {
+                                            labelChilds.push(el('small', { style: { marginLeft: 'auto', fontWeight: 'bold' } }, [' (Your Answer)']));
+                                        }
+                                        if (letter === correctLetter && letter !== selectedLetter) {
+                                            labelChilds.push(el('small', { style: { marginLeft: 'auto', fontWeight: 'bold' } }, [' (Correct Answer)']));
+                                        }
+
+                                        optionChildren.push(el('div', { className: `option-item ${optClass}` }, [
+                                            el('span', { className: 'option-letter' }, [letter]),
+                                            el('span', {}, labelChilds)
+                                        ]));
+                                    });
+
+                                    const optSection = el('div', { className: 'detail-section' }, [
+                                        el('div', { className: 'detail-section-title' }, ['Answers']),
+                                        el('div', { className: 'option-list' }, optionChildren)
+                                    ]);
+
+                                    if (a.question_data.explanation) {
+                                        optSection.appendChild(el('div', { className: 'explanation-box' }, [
+                                            el('b', {}, ['Explanation: ']),
+                                            a.question_data.explanation
+                                        ]));
+                                    }
+                                    itemEl.appendChild(optSection);
+                                }
+
+                                if (!isObjective) {
+                                    const submissionText = a.skill === 'speaking' ? a.transcript : a.writing_submission;
+                                    
+                                    const subContent = el('div', { style: { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#fff' } });
+                                    (submissionText || '').split('\n').forEach(line => {
+                                        subContent.appendChild(el('span', {}, [line]));
+                                        subContent.appendChild(el('br'));
+                                    });
+
+                                    itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                        el('div', { className: 'detail-section-title' }, ['Your Submission']),
+                                        subContent
+                                    ]));
+
+                                    if (a.criteria_json && a.criteria_json.length > 0) {
+                                        const critList = [];
+                                        a.criteria_json.forEach(criterion => {
+                                            critList.push(el('div', { style: { background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '8px' } }, [
+                                                el('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px' } }, [
+                                                    el('b', { style: { fontSize: '0.85rem', color: '#fff' } }, [criterion.name.replace(/_/g, ' ').toUpperCase()]),
+                                                    el('span', { style: { fontSize: '0.85rem', fontWeight: 'bold', color: '#fbbf24' } }, [`${criterion.score}/${criterion.max || 100}`])
+                                                ]),
+                                                el('div', { style: { background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px', marginBottom: '6px' } }, [
+                                                    el('div', { style: { background: '#fbbf24', height: '100%', borderRadius: '2px', width: `${Math.max(0, Math.min(100, (criterion.score / (criterion.max || 100)) * 100))}%` } })
+                                                ]),
+                                                el('small', { style: { fontSize: '0.75rem', color: 'var(--muted)', display: 'block', lineHeight: '1.3' } }, [criterion.feedback])
+                                            ]));
+                                        });
+                                        itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                            el('div', { className: 'detail-section-title' }, ['AI Evaluation Breakdown']),
+                                            el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px', marginTop: '10px' } }, critList)
+                                        ]));
+                                    }
+
+                                    if (a.feedback) {
+                                        itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                            el('div', { className: 'detail-section-title' }, ['Overall AI Feedback']),
+                                            el('p', { className: 'muted', style: { margin: '4px 0 0 0', fontSize: '0.9rem', lineHeight: '1.5' } }, [a.feedback])
+                                        ]));
+                                    }
+
+                                    if ((a.strengths_json && a.strengths_json.length > 0) || (a.improvements_json && a.improvements_json.length > 0)) {
+                                        const strongList = [];
+                                        const improveList = [];
+                                        if (a.strengths_json && a.strengths_json.length > 0) {
+                                            const items = a.strengths_json.map(s => el('li', {}, [s]));
+                                            strongList.push(el('div', {}, [
+                                                el('div', { className: 'detail-section-title', style: { color: '#34d399' } }, ['Strengths']),
+                                                el('ul', { style: { margin: '6px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.4' } }, items)
+                                            ]));
+                                        }
+                                        if (a.improvements_json && a.improvements_json.length > 0) {
+                                            const items = a.improvements_json.map(s => el('li', {}, [s]));
+                                            improveList.push(el('div', {}, [
+                                                el('div', { className: 'detail-section-title', style: { color: '#f87171' } }, ['Improvements']),
+                                                el('ul', { style: { margin: '6px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.4' } }, items)
+                                            ]));
+                                        }
+                                        itemEl.appendChild(el('div', { className: 'detail-section', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' } }, [
+                                            ...strongList,
+                                            ...improveList
+                                        ]));
+                                    }
+
+                                    if (a.suggested_revision) {
+                                        const revBox = el('div', { style: { background: 'rgba(251,191,36,0.03)', border: '1px dashed rgba(251,191,36,0.2)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#fcd34d' } });
+                                        a.suggested_revision.split('\n').forEach(line => {
+                                            revBox.appendChild(el('span', {}, [line]));
+                                            revBox.appendChild(el('br'));
+                                        });
+                                        itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                            el('div', { className: 'detail-section-title', style: { color: '#fbbf24' } }, ['Suggested Revision']),
+                                            revBox
+                                        ]));
+                                    }
+
+                                    if (a.example_answer) {
+                                        const exBox = el('div', { style: { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#cbd5e1' } });
+                                        a.example_answer.split('\n').forEach(line => {
+                                            exBox.appendChild(el('span', {}, [line]));
+                                            exBox.appendChild(el('br'));
+                                        });
+                                        itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                            el('div', { className: 'detail-section-title' }, ['Model Answer / Example Response']),
+                                            exBox
+                                        ]));
+                                    }
+                                }
+
+                                fragment.appendChild(itemEl);
+                            });
+                            modalBody.replaceChildren(fragment);
+                        })
+                        .catch(err => {
+                            modalBody.replaceChildren(el('div', { className: 'alert error' }, [err.message]));
+                        });
+                });
+            });
         });
     </script>
 </body>
