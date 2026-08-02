@@ -325,39 +325,38 @@ $history = array_slice($history, 0, 10);
                 <?php if (empty($history)): ?>
                     <div class="empty" style="margin-top: 15px;">Belum ada riwayat pengerjaan latihan.</div>
                 <?php else: ?>
-                    <div style="overflow-x: auto; margin-top: 15px;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <thead>
-                                <tr>
-                                    <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Modul / Aktivitas</th>
-                                    <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Skill</th>
-                                    <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Level</th>
-                                    <th style="text-align: center; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Skor</th>
-                                    <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Tanggal Selesai</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($history as $h): ?>
-                                    <tr>
-                                        <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 500;">
-                                            <?= $h['type'] === 'practice' ? 'Self Learning Practice' : student_h($h['title'] ?? null, 'Learning Activity') ?>
-                                        </td>
-                                        <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                            <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(student_h($h['skill'] ?? null, 'general')) ?></span>
-                                        </td>
-                                        <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-transform: capitalize;">
-                                            <?= student_h($h['level'] ?? null, '-') ?>
-                                        </td>
-                                        <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; font-weight: bold; color: <?= $h['score'] >= 80 ? '#10b981' : ($h['score'] >= 50 ? '#3b82f6' : '#ef4444') ?>;">
-                                            <?= (int)$h['score'] ?>/100
-                                        </td>
-                                        <td style="padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; color: rgba(255,255,255,0.5);">
-                                            <?= student_h($h['completed_at'] ?? null, '-') ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 18px;">
+                        <?php foreach ($history as $h): 
+                            $skill = strtolower($h['skill']);
+                            $skillIcons = ['reading' => '📖', 'listening' => '🎧', 'speaking' => '🎙️', 'writing' => '✍️'];
+                            $skillIcon = $skillIcons[$skill] ?? '📝';
+                            $score = (int)$h['score'];
+                            $scoreColor = $score >= 80 ? '#10b981' : ($score >= 50 ? '#3b82f6' : '#ef4444');
+                            $scoreBg = $score >= 80 ? 'rgba(16, 185, 129, 0.08)' : ($score >= 50 ? 'rgba(59, 82, 246, 0.08)' : 'rgba(239, 68, 68, 0.08)');
+                            
+                            $title = $h['type'] === 'practice' ? 'Self Learning Practice' : student_h($h['title'] ?? null, 'Learning Activity');
+                        ?>
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; gap: 16px; transition: transform 0.2s ease, background 0.2s ease;">
+                                <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
+                                    <div style="font-size: 1.4rem; width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+                                        <?= $skillIcon ?>
+                                    </div>
+                                    <div style="min-width: 0;">
+                                        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: #fff; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><?= $title ?></h3>
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                                            <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.72rem; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.03em;"><?= ucfirst($skill) ?></span>
+                                            <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.72rem; padding: 2px 8px; text-transform: capitalize;"><?= student_h($h['level'] ?? null, '-') ?></span>
+                                            <span style="font-size: 0.78rem; color: rgba(255,255,255,0.4);"><?= date('d M Y, H:i', strtotime((string)$h['completed_at'])) ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="flex-shrink: 0;">
+                                    <div style="background: <?= $scoreBg ?>; color: <?= $scoreColor ?>; padding: 6px 12px; border-radius: 10px; font-weight: 700; font-family: Orbitron, sans-serif; font-size: 0.88rem; border: 1px solid <?= $scoreColor ?>20; white-space: nowrap;">
+                                        <?= $score ?>/100
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </section>
