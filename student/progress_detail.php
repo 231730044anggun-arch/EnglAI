@@ -257,6 +257,29 @@ try {
             }
         }
 
+        $ansJson = json_decode((string)$row['answer_json'], true) ?: [];
+        $selectedLetter = $ansJson['selected'] ?? null;
+        $correctLetter = $ansJson['correct_answer'] ?? null;
+        
+        if (isset($content['options']) && is_array($content['options'])) {
+            if ($selectedLetter === null && isset($ansJson['selected_option_id'])) {
+                foreach ($rawOptions as $index => $opt) {
+                    if (is_array($opt) && isset($opt['id']) && (string)$opt['id'] === (string)$ansJson['selected_option_id']) {
+                        $selectedLetter = chr(65 + $index);
+                        break;
+                    }
+                }
+            }
+            if ($correctLetter === null && isset($ansJson['correct_option_id'])) {
+                foreach ($rawOptions as $index => $opt) {
+                    if (is_array($opt) && isset($opt['id']) && (string)$opt['id'] === (string)$ansJson['correct_option_id']) {
+                        $correctLetter = chr(65 + $index);
+                        break;
+                    }
+                }
+            }
+        }
+
         $results[] = [
             'id' => (int)$row['id'],
             'title' => $row['title'],
@@ -267,7 +290,10 @@ try {
             'activity_type' => $row['activity_type'],
             'skill' => $row['skill'],
             'level' => $row['level'],
-            'answer_json' => json_decode((string)$row['answer_json'], true),
+            'answer_json' => [
+                'selected' => $selectedLetter,
+                'correct_answer' => $correctLetter ?: ($content['answer'] ?? null)
+            ],
             'transcript' => $row['transcript'],
             'writing_submission' => $row['writing_submission'],
             'criteria_json' => json_decode((string)$row['criteria_json'], true),
