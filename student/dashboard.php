@@ -183,23 +183,28 @@ $skillDescriptions = [
     'writing' => 'Latih penulisan esai bahasa Inggris terstruktur sesuai dengan prompt topik dari Guru.'
 ];
 
-// Fetch up to 10 recent activities from attempts
-$stmt = $pdo->prepare("SELECT 'activity' as type, a.id as attempt_id, NULL as reading_session_id, a.score, a.completed_at, l.title, l.skill, l.level FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.member_id=? AND a.status='completed' ORDER BY a.completed_at DESC LIMIT 10");
-$stmt->execute([(int)$member['id']]);
-$hist1 = $stmt->fetchAll();
-
 // Fetch up to 10 recent Reading sessions
-$stmt = $pdo->prepare("SELECT 'reading_session' as type, NULL as attempt_id, id as reading_session_id, ROUND((score / (total_questions * 5)) * 100) as score, completed_at, CONCAT('Reading Practice ', UPPER(level)) as title, 'reading' as skill, level FROM reading_sessions WHERE member_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
-$stmt->execute([(int)$member['id']]);
-$hist3 = $stmt->fetchAll();
+$stmt = $pdo->prepare("SELECT 'reading_session' as type, id as reading_session_id, NULL as listening_session_id, NULL as speaking_session_id, NULL as writing_session_id, ROUND((score / (total_questions * 5)) * 100) as score, completed_at, CONCAT('Reading – ', UPPER(level)) as title, 'reading' as skill, level FROM reading_sessions WHERE member_id=? AND classroom_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+$stmt->execute([(int)$member['id'], (int)$classroomId]);
+$histReading = $stmt->fetchAll();
 
-// Fetch up to 10 recent practice sessions (legacy)
-$stmt = $pdo->prepare("SELECT 'practice' as type, NULL as attempt_id, NULL as reading_session_id, score, completed_at, 'Practice Quiz' as title, 'general' as skill, 'all' as level FROM student_learning_sessions WHERE member_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
-$stmt->execute([(int)$member['id']]);
-$hist2 = $stmt->fetchAll();
+// Fetch up to 10 recent Listening sessions
+$stmt = $pdo->prepare("SELECT 'listening_session' as type, NULL as reading_session_id, id as listening_session_id, NULL as speaking_session_id, NULL as writing_session_id, score, completed_at, CONCAT('Listening – ', UPPER(level)) as title, 'listening' as skill, level FROM listening_sessions WHERE member_id=? AND classroom_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+$stmt->execute([(int)$member['id'], (int)$classroomId]);
+$histListening = $stmt->fetchAll();
+
+// Fetch up to 10 recent Speaking sessions
+$stmt = $pdo->prepare("SELECT 'speaking_session' as type, NULL as reading_session_id, NULL as listening_session_id, id as speaking_session_id, NULL as writing_session_id, ROUND(COALESCE((SELECT AVG(sr.score) FROM speaking_recordings sr WHERE sr.session_id=ss.id),0)) as score, completed_at, CONCAT('Speaking – ', UPPER(level)) as title, 'speaking' as skill, level FROM speaking_sessions ss WHERE member_id=? AND classroom_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+$stmt->execute([(int)$member['id'], (int)$classroomId]);
+$histSpeaking = $stmt->fetchAll();
+
+// Fetch up to 10 recent Writing sessions
+$stmt = $pdo->prepare("SELECT 'writing_session' as type, NULL as reading_session_id, NULL as listening_session_id, NULL as speaking_session_id, id as writing_session_id, ROUND(COALESCE((SELECT AVG(ws2.score) FROM writing_submissions ws2 WHERE ws2.session_id=ws.id AND ws2.score IS NOT NULL),0)) as score, completed_at, CONCAT('Writing – ', UPPER(level)) as title, 'writing' as skill, level FROM writing_sessions ws WHERE member_id=? AND classroom_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 10");
+$stmt->execute([(int)$member['id'], (int)$classroomId]);
+$histWriting = $stmt->fetchAll();
 
 // Combine and sort history logs
-$history = array_merge($hist1, $hist3, $hist2);
+$history = array_merge($histReading, $histListening, $histSpeaking, $histWriting);
 usort($history, function($a, $b) {
     return strcmp($b['completed_at'], $a['completed_at']);
 });
@@ -533,17 +538,18 @@ $history = array_slice($history, 0, 10);
                             $scoreBg = $score >= 80 ? 'rgba(16, 185, 129, 0.08)' : ($score >= 50 ? 'rgba(59, 82, 246, 0.08)' : 'rgba(239, 68, 68, 0.08)');
                             
                             $title = $h['type'] === 'practice' ? 'Self Learning Practice' : student_h($h['title'] ?? null, 'Learning Activity');
-                        ?>
-                            <?php 
-                            $isClickable = in_array($h['type'], ['activity', 'reading_session'], true);
+                            
+                            $isClickable = in_array($h['type'], ['reading_session', 'listening_session', 'speaking_session', 'writing_session'], true);
                             $clickableClass = $isClickable ? 'btn-view-history-detail' : '';
                             $clickableStyle = $isClickable ? 'cursor: pointer;' : '';
                             ?>
                             <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; gap: 16px; transition: transform 0.2s ease, background 0.2s ease; <?= $clickableStyle ?>" 
                                  class="history-item <?= $clickableClass ?>"
                                  data-type="<?= $h['type'] ?>"
-                                 data-attempt-id="<?= $h['attempt_id'] ?? '' ?>"
                                  data-reading-session-id="<?= $h['reading_session_id'] ?? '' ?>"
+                                 data-listening-session-id="<?= $h['listening_session_id'] ?? '' ?>"
+                                 data-speaking-session-id="<?= $h['speaking_session_id'] ?? '' ?>"
+                                 data-writing-session-id="<?= $h['writing_session_id'] ?? '' ?>"
                                  data-title="<?= student_h($title) ?>">
                                 <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
                                     <div style="font-size: 1.4rem; width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
@@ -811,8 +817,10 @@ $history = array_slice($history, 0, 10);
             document.querySelectorAll(".btn-view-history-detail").forEach(card => {
                 card.addEventListener("click", function() {
                     const type = this.dataset.type;
-                    const attemptId = this.dataset.attemptId;
                     const readingSessionId = this.dataset.readingSessionId;
+                    const listeningSessionId = this.dataset.listeningSessionId;
+                    const speakingSessionId = this.dataset.speakingSessionId;
+                    const writingSessionId = this.dataset.writingSessionId;
                     const titleText = this.dataset.title;
 
                     modalTitle.textContent = titleText || "Detail Latihan";
@@ -825,10 +833,17 @@ $history = array_slice($history, 0, 10);
                     modal.style.display = "block";
 
                     let url = '';
-                    if (type === 'reading_session') {
+                    if (type === 'reading_session' && readingSessionId) {
                         url = `/student/progress_detail.php?reading_session_id=${readingSessionId}`;
+                    } else if (type === 'listening_session' && listeningSessionId) {
+                        url = `/student/progress_detail.php?listening_session_id=${listeningSessionId}`;
+                    } else if (type === 'speaking_session' && speakingSessionId) {
+                        url = `/student/progress_detail.php?speaking_session_id=${speakingSessionId}`;
+                    } else if (type === 'writing_session' && writingSessionId) {
+                        url = `/student/progress_detail.php?writing_session_id=${writingSessionId}`;
                     } else {
-                        url = `/student/progress_detail.php?attempt_id=${attemptId}`;
+                        modalBody.replaceChildren(el('div', { className: 'empty' }, ['Tidak ada detail pengerjaan yang tersedia.']));
+                        return;
                     }
 
                     fetch(url)

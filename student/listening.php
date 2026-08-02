@@ -3,7 +3,27 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/koneksi.php';require_once __DIR__.'/../vendor/autoload.php';
 use EnglAI\Learning\ListeningSessionService;use EnglAI\Learning\Level;use EnglAI\Mvp\StudentSession;use EnglAI\Security\Csrf;
 $pdo=db();$member=StudentSession::requireMember($pdo);$mid=(int)$member['id'];$cid=(int)$member['classroom_id'];$service=new ListeningSessionService($pdo);$level='';$error='';try{$level=Level::validate((string)($_GET['level']??'intermediate'));}catch(Throwable){$error='Level Listening tidak valid.';}$id=(int)($_GET['session']??$_POST['session_id']??0);
-if(!$id&&(isset($_GET['start'])||isset($_GET['continue'])||isset($_GET['play_again']))){try{$id=$service->start($cid,$mid,$level,isset($_GET['play_again']));header('Location: /student/listening.php?session='.$id);exit;}catch(Throwable$e){$error=$e->getMessage();}}
+if(!$id&&(isset($_GET['start'])||isset($_GET['continue'])||isset($_GET['play_again']))){try{
+$stmt = $pdo->prepare("SELECT completed_at FROM listening_sessions WHERE member_id=? AND classroom_id=? AND level=? AND status='completed' ORDER BY completed_at DESC LIMIT 1");
+$stmt->execute([$mid, $cid, $level]);
+$lastCompleted = $stmt->fetchColumn();
+if ($lastCompleted) {
+    $elapsed = time() - strtotime((string)$lastCompleted);
+    if ($elapsed < 60) {
+        throw new RuntimeException("Harap tunggu " . (60 - $elapsed) . " detik lagi sebelum memulai ulang latihan ini.");
+    }
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM listening_session_answers WHERE listening_session_id IN (SELECT id FROM listening_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?)")->execute([$mid, $cid, $level]);
+        $pdo->prepare("DELETE FROM learning_attempts WHERE member_id = ? AND classroom_id = ? AND activity_id IN (SELECT id FROM learning_activities WHERE skill='listening' AND level=?)")->execute([$mid, $cid, $level]);
+        $pdo->prepare("DELETE FROM listening_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?")->execute([$mid, $cid, $level]);
+        $pdo->commit();
+    } catch (\Throwable $ex) {
+        $pdo->rollBack();
+        throw $ex;
+    }
+}
+$id=$service->start($cid,$mid,$level,isset($_GET['play_again']));header('Location: /student/listening.php?session='.$id);exit;}catch(Throwable$e){$error=$e->getMessage();}}
 if($_SERVER['REQUEST_METHOD']==='POST'){header('Content-Type: application/json; charset=UTF-8');if(!Csrf::validate($_POST['csrf_token']??null)){http_response_code(419);echo json_encode(['success'=>false,'code'=>'CSRF_INVALID','message'=>'Session keamanan berakhir.']);exit;}try{$action=(string)($_POST['action']??'answer');if($action==='play')$out=$service->play($id,$mid);elseif($action==='begin'){$service->begin($id,$mid);$out=['success'=>true];}else$out=$service->answer($id,$mid,(int)($_POST['activity_id']??0),isset($_POST['answer'])?(string)$_POST['answer']:null,($_POST['timed_out']??'')==='1');echo json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}catch(Throwable$e){$code=$e->getMessage();http_response_code(in_array($code,['STALE_QUESTION','PLAY_LIMIT'],true)?409:422);app_log('warning','Listening gameplay request rejected',['session_id'=>$id,'member_id'=>$mid,'code'=>$code]);echo json_encode(['success'=>false,'code'=>$code,'message'=>$code==='PLAY_LIMIT'?'Audio sudah diputar dua kali.':'Request Listening tidak dapat diproses.']);exit;}}
 $session=null;$state=null;$review=[];if($id){try{$session=$service->get($id,$mid);$state=$service->publicState($session);if($session['status']==='completed')$review=$service->review($id,$mid);}catch(Throwable$e){$error=$e->getMessage();}}function lh(mixed$v):string{return htmlspecialchars((string)($v??''),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');}$csrf=Csrf::token();
 ?><!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Listening Self Learning · EnglAI</title><link rel="stylesheet" href="/assets/css/mvp.css"><link rel="stylesheet" href="/assets/css/listening-game.css"></head><body data-listening-game data-session-id="<?=$id?>" data-csrf="<?=lh($csrf)?>"><div class="stars"></div><header class="nav"><a class="brand" href="/student/dashboard.php">EnglAI</a><?php if($session):?><div class="row"><span class="badge available">Listening</span><span class="badge"><?=lh(ucfirst((string)$session['level']))?></span><span>Question <b data-question-count><?=min((int)$session['current_position']+1,10)?></b> of 10 · Score <b data-score><?=(int)$session['score']?></b></span></div><?php endif;?></header><main class="game-shell" data-listening-stage>

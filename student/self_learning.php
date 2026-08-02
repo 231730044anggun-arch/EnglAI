@@ -32,7 +32,26 @@ if (isset($_GET['reset']) && (int)$_GET['reset'] === 1 && $level !== '') {
     $levels=$service->productionLevelAvailability($classroomId,$memberId);foreach($levels as&$levelItem)if(!$levelItem['ready'])$levelItem['status']='preparing';unset($levelItem);
 }
 
-$launch=isset($_GET['start'])||isset($_GET['continue'])||isset($_GET['play_again']);if($id<1&&$launch&&$error===''){try{if($level===''||!isset($levels[$level]))throw new RuntimeException('Level Reading tidak disediakan Teacher.');if(!$levels[$level]['ready'])throw new RuntimeException('Reading content untuk level ini sedang dipersiapkan.');$qc = isset($levels[$level]) ? (int)$levels[$level]['valid_count'] : 20;$id=$service->start($classroomId,$memberId,$level,isset($_GET['play_again']),$qc);header('Location: /student/self_learning.php?id='.$id);exit;}catch(Throwable$e){$error=$e->getMessage();}}
+$launch=isset($_GET['start'])||isset($_GET['continue'])||isset($_GET['play_again']);if($id<1&&$launch&&$error===''){try{if($level===''||!isset($levels[$level]))throw new RuntimeException('Level Reading tidak disediakan Teacher.');if(!$levels[$level]['ready'])throw new RuntimeException('Reading content untuk level ini sedang dipersiapkan.');
+$stmt = $pdo->prepare("SELECT completed_at FROM reading_sessions WHERE member_id=? AND classroom_id=? AND level=? AND status='completed' ORDER BY completed_at DESC LIMIT 1");
+$stmt->execute([$memberId, $classroomId, $level]);
+$lastCompleted = $stmt->fetchColumn();
+if ($lastCompleted) {
+    $elapsed = time() - strtotime((string)$lastCompleted);
+    if ($elapsed < 60) {
+        throw new RuntimeException("Harap tunggu " . (60 - $elapsed) . " detik lagi sebelum memulai ulang latihan ini.");
+    }
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM reading_attempts WHERE reading_session_id IN (SELECT id FROM reading_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?)")->execute([$memberId, $classroomId, $level]);
+        $pdo->prepare("DELETE FROM reading_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?")->execute([$memberId, $classroomId, $level]);
+        $pdo->commit();
+    } catch (\Throwable $ex) {
+        $pdo->rollBack();
+        throw $ex;
+    }
+}
+$qc = isset($levels[$level]) ? (int)$levels[$level]['valid_count'] : 20;$id=$service->start($classroomId,$memberId,$level,isset($_GET['play_again']),$qc);header('Location: /student/self_learning.php?id='.$id);exit;}catch(Throwable$e){$error=$e->getMessage();}}
 $session=$id?$service->get($id,$memberId):null;if($session){$level=(string)$session['level'];if($session['status']==='active'){try{ReadingSessionService::assertSnapshot($session['snapshot'],(int)$session['total_questions']);}catch(RuntimeException){header('Location: /student/self_learning.php');exit;}}}
 if($_SERVER['REQUEST_METHOD']==='POST'){header('Content-Type: application/json; charset=UTF-8');if(!Csrf::validate($_POST['csrf_token']??null)){http_response_code(419);echo json_encode(['success'=>false,'code'=>'CSRF_INVALID','message'=>'Session keamanan berakhir. Muat ulang halaman.']);exit;}try{if(!$session)throw new RuntimeException('SESSION_NOT_FOUND');$action=(string)($_POST['reading_ajax']??'submit');if($action==='begin'){$current=$service->question($session);if(!$current||!hash_equals((string)$current['id'],(string)($_POST['question_id']??'')))throw new RuntimeException('STALE_QUESTION');$service->beginQuestion($id,$memberId);echo json_encode(['success'=>true]);exit;}echo json_encode($service->answer($id,$memberId,(string)($_POST['question_id']??''),isset($_POST['option_id'])?(string)$_POST['option_id']:null,($_POST['timed_out']??'')==='1'),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}catch(InvalidArgumentException){http_response_code(422);echo json_encode(['success'=>false,'code'=>'INVALID_OPTION','message'=>'Pilihan jawaban tidak valid.']);exit;}catch(Throwable$e){$code=$e->getMessage();http_response_code(in_array($code,['STALE_QUESTION','SESSION_COMPLETED'],true)?409:500);app_log('error','Reading AJAX failed',['code'=>$code,'session_id'=>$id,'member_id'=>$memberId]);$messages=['STALE_QUESTION'=>'Pertanyaan sudah berubah. Muat ulang halaman.','SESSION_COMPLETED'=>'Reading session sudah selesai.'];echo json_encode(['success'=>false,'code'=>$messages[$code]??'SUBMIT_FAILED','message'=>$messages[$code]??'Jawaban belum tersimpan. Silakan coba lagi.']);exit;}}
 $question=$session?$service->question($session):null;if($question)$service->beginQuestion($id,$memberId);$attempts=$session&&$session['status']==='completed'?$service->attempts($id):[];$position=$session?(int)$session['current_position']:0;$score=$session?(int)$session['score']:0;$correct=count(array_filter($attempts,fn($a)=>$a['result']==='correct'));$timeouts=count(array_filter($attempts,fn($a)=>$a['result']==='timed_out'));$totalQ=$session?(int)$session['total_questions']:20;function rh(mixed$v):string{return htmlspecialchars((string)($v??''),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');}

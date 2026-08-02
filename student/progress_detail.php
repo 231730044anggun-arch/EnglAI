@@ -100,7 +100,183 @@ try {
         exit;
     }
 
+
+    // --- LISTENING SESSION DETAIL ---
+    $listeningSessionId = isset($_GET['listening_session_id']) ? (int)$_GET['listening_session_id'] : 0;
+    if ($listeningSessionId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM listening_sessions WHERE id = ? AND member_id = ? AND classroom_id = ? AND status = 'completed'");
+        $stmt->execute([$listeningSessionId, $memberId, $classroomId]);
+        $session = $stmt->fetch();
+        if (!$session) throw new RuntimeException("Listening session tidak ditemukan.");
+
+        $snapshot = json_decode((string)$session['snapshot_json'], true) ?: [];
+        $questions = $snapshot['questions'] ?? [];
+
+        $stmt = $pdo->prepare("SELECT * FROM listening_session_answers WHERE listening_session_id = ? ORDER BY id");
+        $stmt->execute([$listeningSessionId]);
+        $answers = $stmt->fetchAll();
+
+        $actMap = [];
+        foreach ($questions as $q) $actMap[(int)$q['activity_id']] = $q;
+
+        $results = [];
+        foreach ($answers as $row) {
+            $q = $actMap[(int)$row['activity_id']] ?? null;
+            if (!$q) continue;
+
+            $optionsList = array_map(fn($o) => is_array($o) ? (string)($o['text'] ?? '') : (string)$o, $q['options'] ?? []);
+
+            $selectedId = (string)($row['selected_answer'] ?? '');
+            $correctId  = (string)($q['correct_option_id'] ?? '');
+            $selectedLetter = null;
+            $correctLetter  = null;
+            foreach ($q['options'] as $i => $opt) {
+                $oid = is_array($opt) ? (string)($opt['id'] ?? '') : '';
+                if ($oid === $selectedId) $selectedLetter = chr(65 + $i);
+                if ($oid === $correctId)  $correctLetter  = chr(65 + $i);
+            }
+            if (!$correctLetter && isset($q['correct_letter'])) $correctLetter = $q['correct_letter'];
+
+            $results[] = [
+                'id'          => (int)$row['id'],
+                'title'       => 'Listening – ' . ($q['title'] ?? 'Question'),
+                'instruction' => 'Dengarkan audio dan pilih jawaban yang tepat.',
+                'score'       => $row['result'] === 'correct' ? 100 : 0,
+                'feedback'    => $q['explanation'] ?? '',
+                'submitted_at'=> $row['answered_at'],
+                'activity_type'=> 'objective',
+                'skill'       => 'listening',
+                'level'       => $session['level'],
+                'answer_json' => ['selected' => $selectedLetter, 'correct_answer' => $correctLetter],
+                'transcript'  => null, 'writing_submission' => null,
+                'criteria_json' => null, 'strengths_json' => null, 'improvements_json' => null,
+                'grammar_notes_json' => null, 'vocabulary_notes_json' => null,
+                'suggested_revision' => null, 'example_answer' => null,
+                'question_data' => [
+                    'passage'     => null,
+                    'question'    => $q['question'] ?? null,
+                    'options'     => $optionsList,
+                    'explanation' => $q['explanation'] ?? null,
+                    'transcript'  => $q['script'] ?? $q['transcript'] ?? null,
+                    'scenario'    => null,
+                    'context'     => null,
+                ]
+            ];
+        }
+        echo json_encode(['success' => true, 'attempts' => $results]);
+        exit;
+    }
+
+    // --- SPEAKING SESSION DETAIL ---
+    $speakingSessionId = isset($_GET['speaking_session_id']) ? (int)$_GET['speaking_session_id'] : 0;
+    if ($speakingSessionId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM speaking_sessions WHERE id = ? AND member_id = ? AND classroom_id = ? AND status = 'completed'");
+        $stmt->execute([$speakingSessionId, $memberId, $classroomId]);
+        $session = $stmt->fetch();
+        if (!$session) throw new RuntimeException("Speaking session tidak ditemukan.");
+
+        $tasks = json_decode((string)$session['task_snapshot_json'], true) ?: [];
+
+        $stmt = $pdo->prepare("SELECT * FROM speaking_recordings WHERE session_id = ? ORDER BY id");
+        $stmt->execute([$speakingSessionId]);
+        $recordings = $stmt->fetchAll();
+
+        $taskMap = [];
+        foreach ($tasks as $t) $taskMap[(int)$t['id']] = $t;
+
+        $results = [];
+        foreach ($recordings as $row) {
+            $t = $taskMap[(int)$row['task_id']] ?? null;
+            $assessment = json_decode((string)($row['assessment_json'] ?? ''), true) ?: [];
+            $results[] = [
+                'id'          => (int)$row['id'],
+                'title'       => 'Speaking – Task ' . ((int)array_search($t, $tasks) + 1),
+                'instruction' => $t['instruction'] ?? '',
+                'score'       => (int)round((float)($row['score'] ?? 0)),
+                'feedback'    => $assessment['overall_feedback'] ?? '',
+                'submitted_at'=> $row['created_at'],
+                'activity_type'=> 'speaking',
+                'skill'       => 'speaking',
+                'level'       => $session['level'],
+                'answer_json' => ['selected' => null, 'correct_answer' => null],
+                'transcript'  => $row['final_transcript'] ?? $row['raw_transcript'] ?? null,
+                'writing_submission' => null,
+                'criteria_json'     => array_map(fn($c) => ['name' => $c['name'], 'score' => $c['score'], 'max' => $c['max'] ?? 100, 'feedback' => $c['feedback'] ?? ''], $assessment['criteria'] ?? []),
+                'strengths_json'    => null, 'improvements_json' => null,
+                'grammar_notes_json' => null, 'vocabulary_notes_json' => null,
+                'suggested_revision' => $assessment['suggested_revision'] ?? null,
+                'example_answer'    => null,
+                'question_data'     => [
+                    'passage'    => null,
+                    'question'   => $t['prompt'] ?? $t['target_text'] ?? null,
+                    'options'    => null,
+                    'explanation'=> null,
+                    'transcript' => null,
+                    'scenario'   => $t['scenario'] ?? null,
+                    'context'    => $t['guidance'] ?? null,
+                ]
+            ];
+        }
+        echo json_encode(['success' => true, 'attempts' => $results]);
+        exit;
+    }
+
+    // --- WRITING SESSION DETAIL ---
+    $writingSessionId = isset($_GET['writing_session_id']) ? (int)$_GET['writing_session_id'] : 0;
+    if ($writingSessionId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM writing_sessions WHERE id = ? AND member_id = ? AND classroom_id = ? AND status = 'completed'");
+        $stmt->execute([$writingSessionId, $memberId, $classroomId]);
+        $session = $stmt->fetch();
+        if (!$session) throw new RuntimeException("Writing session tidak ditemukan.");
+
+        $tasks = json_decode((string)$session['task_snapshot_json'], true) ?: [];
+
+        $stmt = $pdo->prepare("SELECT * FROM writing_submissions WHERE session_id = ? ORDER BY id");
+        $stmt->execute([$writingSessionId]);
+        $submissions = $stmt->fetchAll();
+
+        $taskMap = [];
+        foreach ($tasks as $t) $taskMap[(int)$t['id']] = $t;
+
+        $results = [];
+        foreach ($submissions as $row) {
+            $t = $taskMap[(int)$row['task_id']] ?? null;
+            $assessment = json_decode((string)($row['assessment_json'] ?? ''), true) ?: [];
+            $results[] = [
+                'id'           => (int)$row['id'],
+                'title'        => 'Writing – Task ' . ((int)$row['id']),
+                'instruction'  => $t['instruction'] ?? '',
+                'score'        => (int)round((float)($row['score'] ?? 0)),
+                'feedback'     => $assessment['overall_feedback'] ?? '',
+                'submitted_at' => $row['submitted_at'],
+                'activity_type'=> 'writing',
+                'skill'        => 'writing',
+                'level'        => $session['level'],
+                'answer_json'  => ['selected' => null, 'correct_answer' => null],
+                'transcript'   => null,
+                'writing_submission' => $row['answer_text'] ?? null,
+                'criteria_json'     => array_map(fn($c) => ['name' => $c['name'], 'score' => $c['score'], 'max' => $c['max'] ?? 100, 'feedback' => $c['feedback'] ?? ''], $assessment['criteria'] ?? []),
+                'strengths_json'    => null, 'improvements_json' => null,
+                'grammar_notes_json' => null, 'vocabulary_notes_json' => null,
+                'suggested_revision' => $assessment['suggested_revision'] ?? null,
+                'example_answer'    => $t['example_answer'] ?? null,
+                'question_data'     => [
+                    'passage'    => null,
+                    'question'   => $t['prompt'] ?? null,
+                    'options'    => null,
+                    'explanation'=> null,
+                    'transcript' => null,
+                    'scenario'   => null,
+                    'context'    => $t['context'] ?? $t['guidance'] ?? null,
+                ]
+            ];
+        }
+        echo json_encode(['success' => true, 'attempts' => $results]);
+        exit;
+    }
+
     $skill = strtolower((string)($_GET['skill'] ?? ''));
+
     if ($attemptId > 0) {
         $stmt = $pdo->prepare("
             SELECT a.id, a.score, a.answer_json, a.transcript, a.writing_submission, a.feedback, a.submitted_at,

@@ -15,5 +15,38 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   speaking_json(['success'=>true,'message'=>'Recording saved','state'=>$service->state($service->get($sid,$mid,$cid))]);
  }catch(Throwable $e){app_log('warning','Speaking upload rejected',['member_id'=>$mid,'error'=>get_class($e)]);speaking_json(['success'=>false,'message'=>$e->getMessage()],422);}
 }
-$level=Level::validate((string)($_GET['level']??'intermediate'));$sid=(int)($_GET['session']??0);try{$session=$sid?$service->get($sid,$mid,$cid):$service->start($mid,$cid,$level,isset($_GET['play_again']));$state=$service->state($session);}catch(Throwable $e){header('Location: /student/skill.php?skill=speaking&message='.rawurlencode($e->getMessage()));exit;}
+$level=Level::validate((string)($_GET['level']??'intermediate'));$sid=(int)($_GET['session']??0);try{
+if(!$sid){
+    $stmt = $pdo->prepare("SELECT completed_at FROM speaking_sessions WHERE member_id=? AND classroom_id=? AND level=? AND status='completed' ORDER BY completed_at DESC LIMIT 1");
+    $stmt->execute([$mid, $cid, $level]);
+    $lastCompleted = $stmt->fetchColumn();
+    if ($lastCompleted) {
+        $elapsed = time() - strtotime((string)$lastCompleted);
+        if ($elapsed < 60) {
+            throw new RuntimeException("Harap tunggu " . (60 - $elapsed) . " detik lagi sebelum memulai ulang latihan ini.");
+        }
+        $pdo->beginTransaction();
+        try {
+            $stmtDel = $pdo->prepare("SELECT storage_path FROM speaking_recordings WHERE session_id IN (SELECT id FROM speaking_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?)");
+            $stmtDel->execute([$mid, $cid, $level]);
+            foreach ($stmtDel->fetchAll(PDO::FETCH_COLUMN) as $sp) {
+                $fullPath = dirname(__DIR__) . '/storage/private/' . $sp;
+                if (is_file($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+            $pdo->prepare("DELETE FROM speaking_recordings WHERE session_id IN (SELECT id FROM speaking_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?)")->execute([$mid, $cid, $level]);
+            $pdo->prepare("DELETE FROM learning_attempts WHERE member_id = ? AND classroom_id = ? AND activity_id IN (SELECT id FROM learning_activities WHERE skill='speaking' AND level=?)")->execute([$mid, $cid, $level]);
+            $pdo->prepare("DELETE FROM speaking_sessions WHERE member_id = ? AND classroom_id = ? AND level = ?")->execute([$mid, $cid, $level]);
+            $pdo->commit();
+        } catch (\Throwable $ex) {
+            $pdo->rollBack();
+            throw $ex;
+        }
+    }
+    $session=$service->start($mid,$cid,$level,isset($_GET['play_again']));
+}else{
+    $session=$service->get($sid,$mid,$cid);
+}
+$state=$service->state($session);}catch(Throwable $e){header('Location: /student/skill.php?skill=speaking&message='.rawurlencode($e->getMessage()));exit;}
 ?><!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Speaking · EnglAI</title><link rel="stylesheet" href="/assets/css/mvp.css"><link rel="stylesheet" href="/assets/css/speaking-game.css"></head><body><div class="stars" aria-hidden="true"></div><header class="nav"><a class="brand" href="/student/dashboard.php"><span class="brand-mark">E</span>EnglAI</a><a class="button secondary" href="/student/skill.php?skill=speaking">← Speaking</a></header><main class="game-shell"><section id="speaking-game" class="card speaking-game" data-session-id="<?=$state['id']?>" data-csrf="<?=htmlspecialchars(Csrf::token())?>"><script type="application/json" data-speaking-state><?=json_encode($state,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE)?></script><div data-speaking-host></div></section></main><script src="/assets/js/speaking-game.js" defer></script></body></html>
