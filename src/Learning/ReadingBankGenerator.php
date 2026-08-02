@@ -6,10 +6,17 @@ use EnglAI\AI\GeminiProvider;use EnglAI\LessonPlan\RppTextCleaner;
 final class ReadingBankGenerator
 {
  public function __construct(private readonly \PDO $pdo){}
- public function generate(int $classroomId,string $level,string $mode='target'):array
+ public function generate(int $classroomId,string $level,mixed $modeOrCount=10):array
  {
    $level=ReadingSessionService::canonicalLevel($level);$q=$this->pdo->prepare('SELECT * FROM classroom_lesson_plans WHERE classroom_id=? AND is_active=1 ORDER BY version DESC LIMIT 1');$q->execute([$classroomId]);$plan=$q->fetch();if(!$plan)throw new \RuntimeException('RPP classroom belum tersedia.');$key=(string)env_value('GEMINI_API_KEY','');$lastError='';
-   $q=$this->pdo->prepare("SELECT * FROM ai_analyses WHERE classroom_id=? AND lesson_plan_id=? AND status='valid' ORDER BY id DESC LIMIT 1");$q->execute([$classroomId,$plan['id']]);$analysis=$q->fetch()?:[];$context=$this->context($analysis,(string)$plan['extracted_text']);$count=$this->geminiCount($classroomId,(int)$plan['id'],$level);$requested=$mode==='more'?20:($mode==='regenerate'?100:max(0,100-$count));$requested=min(100,max(0,$requested));$inserted=0;$rejected=0;$duplicates=0;$batches=0;$model=(string)env_value('GEMINI_MODEL','gemini-2.5-flash');
+   $q=$this->pdo->prepare("SELECT * FROM ai_analyses WHERE classroom_id=? AND lesson_plan_id=? AND status='valid' ORDER BY id DESC LIMIT 1");$q->execute([$classroomId,$plan['id']]);$analysis=$q->fetch()?:[];$context=$this->context($analysis,(string)$plan['extracted_text']);$count=$this->geminiCount($classroomId,(int)$plan['id'],$level);
+   if (is_numeric($modeOrCount)) {
+       $requested = max(10, min(100, (int)$modeOrCount));
+   } else {
+       $mode = (string)$modeOrCount;
+       $requested = $mode==='more' ? 20 : ($mode==='regenerate' ? 100 : max(0, 100-$count));
+   }
+   $requested=min(100,max(0,$requested));$inserted=0;$rejected=0;$duplicates=0;$batches=0;$model=(string)env_value('GEMINI_MODEL','gemini-2.5-flash');
    $module=$this->pdo->prepare("INSERT INTO learning_modules(classroom_id,lesson_plan_id,skill,level,title,objective,competency,position,source,status) VALUES(?,?,'reading',?,'Gemini Reading Bank','Answer varied RPP-grounded reading questions.','Reading comprehension',1,'ai','ready') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),source='ai',status='ready'");$module->execute([$classroomId,$plan['id'],$level]);$moduleId=(int)$this->pdo->lastInsertId();
    for($offset=0;$offset<$requested;$offset+=20){$want=min(20,$requested-$offset);$batchId='rgb_'.bin2hex(random_bytes(8));$raw=null;
     if($key!==''){for($try=0;$try<2;$try++){try{$raw=$this->fromAi($context,$level,$want,$batchId);break;}catch(\Throwable $e){$lastError=$e->getMessage();app_log('warning','Gemini Reading batch failed',['classroom_id'=>$classroomId,'lesson_plan_id'=>$plan['id'],'level'=>$level,'batch_id'=>$batchId,'attempt'=>$try+1,'type'=>get_class($e)]);}}}

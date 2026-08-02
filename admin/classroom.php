@@ -261,45 +261,43 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                     <?php if (empty($recentActivity)): ?>
                         <div class="empty" style="margin-top: 15px;">Belum ada aktivitas siswa yang selesai.</div>
                     <?php else: ?>
-                        <div style="overflow-x: auto; margin-top: 15px;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr>
-                                        <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Student</th>
-                                        <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Modul / Aktivitas</th>
-                                        <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Skill</th>
-                                        <th style="text-align: center; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Skor</th>
-                                        <th style="text-align: left; padding: 10px; border-bottom: 2px solid rgba(255,255,255,0.1);">Waktu Selesai</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recentActivity as $act): 
-                                        $studAvatar = $act['avatar'] ?: 'a.jpg';
-                                        if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $studAvatar)) {
-                                            $studAvatar = 'a.jpg';
-                                        }
-                                    ?>
-                                        <tr>
-                                            <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 8px;">
-                                                <img src="/assets/images/avatars/<?= htmlspecialchars($studAvatar) ?>" alt="Avatar" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
-                                                <span><?= classroom_h($act['display_name'] ?? null, 'Joined Student') ?></span>
-                                            </td>
-                                            <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 500;">
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                            <?php foreach ($recentActivity as $act): 
+                                $studAvatar = $act['avatar'] ?: 'a.jpg';
+                                if (!preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $studAvatar)) {
+                                    $studAvatar = 'a.jpg';
+                                }
+                                $score = (int)$act['score'];
+                                $scoreColor = $score >= 80 ? '#10b981' : ($score >= 50 ? '#3b82f6' : '#ef4444');
+                                $timeStr = '';
+                                if (!empty($act['completed_at'])) {
+                                    $dt = new DateTime($act['completed_at']);
+                                    $timeStr = $dt->format('H:i · d M');
+                                }
+                            ?>
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+                                        <img src="/assets/images/avatars/<?= htmlspecialchars($studAvatar) ?>" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);">
+                                        <div style="min-width: 0; line-height: 1.3;">
+                                            <div style="font-weight: bold; font-size: 0.9rem; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                                                <?= classroom_h($act['display_name'] ?? null, 'Joined Student') ?>
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: var(--muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                                                 <?= ($act['title'] ?? '') === 'Practice Quiz' ? 'Self Learning Practice' : classroom_h($act['title'] ?? null, 'Learning Activity') ?>
-                                            </td>
-                                            <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                                <span class="badge" style="background: rgba(255,255,255,0.05);"><?= ucfirst(classroom_h($act['skill'] ?? null, 'general')) ?></span>
-                                            </td>
-                                            <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; font-weight: bold; color: <?= $act['score'] >= 80 ? '#10b981' : ($act['score'] >= 50 ? '#3b82f6' : '#ef4444') ?>;">
-                                                <?= (int)$act['score'] ?>/100
-                                            </td>
-                                            <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; color: rgba(255,255,255,0.5);">
-                                                <?= classroom_h($act['completed_at'] ?? null, '-') ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                                <span style="opacity: 0.5;">·</span> <?= ucfirst(classroom_h($act['skill'] ?? null, 'general')) ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0; text-align: right;">
+                                        <div style="font-size: 0.7rem; color: var(--muted);">
+                                            <?= htmlspecialchars($timeStr) ?>
+                                        </div>
+                                        <span style="font-family: monospace; font-size: 0.85rem; font-weight: bold; background: <?= $scoreColor ?>15; color: <?= $scoreColor ?>; border: 1px solid <?= $scoreColor ?>30; padding: 2px 8px; border-radius: 6px;">
+                                            <?= $score ?>/100
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
                 </article>
@@ -391,7 +389,8 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                     <form method="post" action="/admin/generate_learning.php">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="classroom_id" value="<?= $id ?>">
-                        <div class="grid two" style="gap: 16px; margin-bottom: 20px;">
+                        <input type="hidden" name="reading_mode" value="target">
+                        <div class="grid three" style="gap: 16px; margin-bottom: 20px;">
                             <div>
                                 <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block;">Skill Focus</label>
                                 <select name="skill" id="generator-skill-select" style="margin-bottom: 0; border-radius: 10px; background: rgba(255,255,255,0.05);">
@@ -408,11 +407,13 @@ $recentActivity = array_slice($recentActivity, 0, 10);
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            <div>
+                                <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block;">Jumlah Soal</label>
+                                <input type="number" name="activity_count" min="10" max="60" value="10" required style="margin-bottom: 0; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; width: 100%; height: 42px; padding: 0 12px; box-sizing: border-box;">
+                            </div>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px;">
-                            <button class="button gold" name="reading_mode" value="target" id="btn-gen-target" style="flex: 1; min-width: 200px;">⚡ Generate Reading Bank</button>
-                            <button class="button secondary" name="reading_mode" value="more" id="btn-gen-more" style="flex: 1; min-width: 200px;">➕ Add More Questions</button>
-                            <button class="button secondary" name="reading_mode" value="regenerate" id="btn-gen-regen" style="flex: 1; min-width: 200px; border-color: rgba(239, 68, 68, 0.3); color: #fecaca; background: rgba(239, 68, 68, 0.05);">🔄 Regenerate Bank</button>
+                            <button class="button gold wide" style="flex: 1;" type="submit">⚡ Generate Content Bank</button>
                         </div>
                     </form>
                     <h3>Reading Gemini Bank</h3>

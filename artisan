@@ -1,8 +1,11 @@
 #!/usr/bin/env php
 <?php
-declare(strict_types=1);
 
-// Helper script to allow 'php artisan serve' in this native PHP project.
+define('ENGLAI_START', microtime(true));
+
+// Register the Composer autoloader...
+require __DIR__.'/vendor/autoload.php';
+
 $command = $argv[1] ?? '';
 
 if ($command === 'serve') {
@@ -12,13 +15,17 @@ if ($command === 'serve') {
             $port = substr($arg, 7);
         }
     }
+
     echo "\n  \033[30;42m INFO \033[0m  Server running on [http://127.0.0.1:{$port}].  \n\n";
     echo "  Press Ctrl+C to stop the server\n\n";
+
     // Redirect stderr to NUL to hide PHP server logs on Windows
     passthru("php -S 127.0.0.1:{$port} router.php 2>NUL");
-} else {
-    echo "EnglAI adalah proyek Native PHP (bukan Laravel).\n";
-    echo "Kami membuatkan file helper ini agar perintah 'php artisan serve' bisa Anda gunakan untuk menjalankan server.\n";
-    echo "Perintah yang didukung:\n";
-    echo "  php artisan serve\n";
+    exit(0);
 }
+
+echo "EnglAI adalah proyek Native PHP (bukan Laravel).\n";
+echo "Kami membuatkan file helper ini agar perintah 'php artisan serve' bisa Anda gunakan untuk menjalankan server.\n";
+echo "Perintah yang didukung:\n";
+echo "  php artisan serve\n";
+exit(0);

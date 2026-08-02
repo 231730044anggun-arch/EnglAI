@@ -59,6 +59,33 @@ if($attemptId<1){$skill=strtolower((string)($_GET['skill']??''));$level=Level::v
   if(!$activity){header('Location: /student/skill.php?skill='.$skill.'&message='.rawurlencode('Materi pembelajaran belum tersedia untuk skill dan level ini.'));exit;}$key=bin2hex(random_bytes(32));$stmt=$pdo->prepare("INSERT INTO learning_attempts(classroom_id,member_id,activity_id,idempotency_key,status,started_at) VALUES(?,?,?,?,'started',NOW())");$stmt->execute([$classroomId,$memberId,$activity['id'],$key]);header('Location: /student/activity.php?attempt='.(int)$pdo->lastInsertId());exit;
 }
 $stmt=$pdo->prepare('SELECT a.*,l.title,l.instruction,l.content_json,l.skill,l.level,l.activity_type,l.source_excerpt,l.competency FROM learning_attempts a JOIN learning_activities l ON l.id=a.activity_id WHERE a.id=? AND a.member_id=? AND a.classroom_id=?');$stmt->execute([$attemptId,$memberId,$classroomId]);$attempt=$stmt->fetch();if(!$attempt){http_response_code(404);exit('Activity tidak ditemukan.');}$content=json_decode((string)($attempt['content_json']??''),true);if(!is_array($content)){http_response_code(500);exit('Activity content invalid.');}if($attempt['skill']==='reading'){header('Location: /student/self_learning.php');exit;}
+
+// Normalize reading / listening activity content structure (handling both old & new generators)
+if (is_array($content)) {
+    if (!isset($content['passage']) && isset($content['short_context'])) {
+        $content['passage'] = $content['short_context'];
+    }
+    if (isset($content['options']) && is_array($content['options'])) {
+        $rawOptions = $content['options'];
+        $content['options'] = array_map(function($o) {
+            return is_array($o) ? ($o['text'] ?? '') : (string)$o;
+        }, $content['options']);
+        
+        if (!isset($content['answer'])) {
+            if (isset($content['correct_option_id'])) {
+                foreach ($rawOptions as $index => $opt) {
+                    if (is_array($opt) && isset($opt['id']) && $opt['id'] === $content['correct_option_id']) {
+                        $content['answer'] = chr(65 + $index);
+                        break;
+                    }
+                }
+            }
+            if (!isset($content['answer'])) {
+                $content['answer'] = 'A';
+            }
+        }
+    }
+}
 if($_SERVER['REQUEST_METHOD']==='POST'){
  Csrf::requireValid($_POST['csrf_token']??null);if($attempt['status']==='completed'){http_response_code(409);exit('Submission sudah diproses.');}$skill=$attempt['skill'];$answerJson=null;$submission='';$score=0;$feedback='';$source='objective';$assessment=null;
  if(in_array($skill,['reading','listening'],true)){$selected=strtoupper((string)($_POST['answer']??''));if(!in_array($selected,['A','B','C','D'],true))$error='Pilih jawaban terlebih dahulu.';else{$correct=hash_equals((string)$content['answer'],$selected);$score=$correct?100:0;$feedback=(string)$content['explanation'];$answerJson=json_encode(['selected'=>$selected,'correct_answer'=>$content['answer'],'is_correct'=>$correct],JSON_UNESCAPED_UNICODE);}}

@@ -227,6 +227,9 @@ final class ContentBankGenerator
 
                 $template = $templates[$i % count($templates)];
                 $question = sprintf($template, $answer);
+                if ($type === 'live_quiz') {
+                    $question = 'Quiz: ' . $question;
+                }
                 
                 $items[] = [
                     'content_type' => $type,

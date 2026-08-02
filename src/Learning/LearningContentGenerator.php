@@ -8,11 +8,11 @@ final class LearningContentGenerator
     private const SKILLS=['reading','listening','speaking','writing'];
     public function __construct(private readonly \PDO $pdo){}
     /** @return array{skill:string,level:string,modules:int,activities:int,duplicates:int,source:string} */
-    public function generate(int $classroomId,string $skill,string $level): array
+    public function generate(int $classroomId,string $skill,string $level,int $count=10): array
     {
         $skill=strtolower(trim($skill));if(!in_array($skill,self::SKILLS,true))throw new \InvalidArgumentException('Skill tidak valid.');$level=Level::validate($level);
         $stmt=$this->pdo->prepare('SELECT * FROM classroom_lesson_plans WHERE classroom_id=? AND is_active=1 ORDER BY version DESC LIMIT 1');$stmt->execute([$classroomId]);$plan=$stmt->fetch();if(!$plan)throw new \RuntimeException('RPP classroom belum tersedia.');
-        $source='fallback';try{$items=$this->fromAi($skill,$level,(string)$plan['extracted_text']);$source='ai';}catch(\Throwable $e){$items=$this->fallback($skill,$level,(string)$plan['extracted_text']);app_log('warning','Learning generation fallback used',['classroom_id'=>$classroomId,'skill'=>$skill,'level'=>$level,'reason'=>get_class($e)]);}
+        $source='fallback';try{$items=$this->fromAi($skill,$level,(string)$plan['extracted_text'],$count);$source='ai';}catch(\Throwable $e){$items=$this->fallback($skill,$level,(string)$plan['extracted_text'],$count);app_log('warning','Learning generation fallback used',['classroom_id'=>$classroomId,'skill'=>$skill,'level'=>$level,'reason'=>get_class($e)]);}
         $modules=0;$created=0;$duplicates=0;$this->pdo->beginTransaction();
         try{
             $moduleIds=[];for($i=1;$i<=3;$i++){$title=ucfirst($skill).' Module '.$i.' · '.ucfirst($level);$stmt=$this->pdo->prepare('INSERT INTO learning_modules(classroom_id,lesson_plan_id,skill,level,title,objective,competency,position,source,status) VALUES(?,?,?,?,?,?,?,?,?,\'ready\') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),title=VALUES(title),source=VALUES(source),status=\'ready\'');$stmt->execute([$classroomId,$plan['id'],$skill,$level,$title,"Develop {$skill} competency at {$level} level.",ucfirst($skill).' comprehension and response',$i,$source]);$moduleIds[$i]=(int)$this->pdo->lastInsertId();$modules++;}
@@ -21,15 +21,14 @@ final class LearningContentGenerator
             $this->pdo->commit();
         }catch(\Throwable $e){$this->pdo->rollBack();throw $e;}
         return ['skill'=>$skill,'level'=>$level,'modules'=>$modules,'activities'=>$created,'duplicates'=>$duplicates,'source'=>$source];
-    }
-    /** @return list<array<string,mixed>> */
-    private function fromAi(string $skill,string $level,string $text): array
+    }    /** @return list<array<string,mixed>> */
+    private function fromAi(string $skill,string $level,string $text,int $count): array
     {
         $key=(string)env_value('GEMINI_API_KEY','');if($key==='')throw new \RuntimeException('Provider unavailable.');$profile=Level::profile($level);
         // Skip the RPP document header — only send the meaningful content
         $body=$this->extractRppBody($text);
         $prompt="You are a professional ESL teacher creating activities for Indonesian high school students.\n"
-            ."Generate exactly 10 high-quality {$skill} activities at {$level} level BASED ON the lesson content below.\n"
+            ."Generate exactly {$count} high-quality {$skill} activities at {$level} level BASED ON the lesson content below.\n"
             ."Complexity Profile: ".json_encode($profile)."\n"
             ."IMPORTANT RULES:\n"
             ."- Base questions on SPECIFIC content from the lesson: animals mentioned, character names, places, grammar points, vocabulary.\n"
@@ -43,7 +42,7 @@ final class LearningContentGenerator
             ."- Speaking fields: scenario, prompt, example_response, keywords array, min_words, rubric array.\n"
             ."- Writing fields: prompt, context (2-3 sentence lesson summary), min_words, max_words, rubric array, example_answer.\n"
             ."LESSON CONTENT:\n".$body;
-        $data=(new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-2.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate($prompt);$items=array_is_list($data)?$data:($data['activities']??[]);if(!is_array($items)||count($items)<10)throw new \RuntimeException('AI activity batch invalid.');return array_slice($items,0,10);
+        $data=(new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-2.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate($prompt);$items=array_is_list($data)?$data:($data['activities']??[]);if(!is_array($items)||count($items)<$count)throw new \RuntimeException('AI activity batch invalid.');return array_slice($items,0,$count);
     }
     /** Skip RPP document header and return only the meaningful lesson body. */
     private function extractRppBody(string $text): string
@@ -57,7 +56,7 @@ final class LearningContentGenerator
         return trim(mb_substr(preg_replace('/\s+/u',' ',$text)??$text,800,18000));
     }
     /** @return list<array<string,mixed>> */
-    private function fallback(string $skill,string $level,string $text): array
+    private function fallback(string $skill,string $level,string $text,int $count): array
     {
         $profile=Level::profile($level);
         // Extract meaningful body, skip header
@@ -94,7 +93,7 @@ final class LearningContentGenerator
             "Retell the story of one animal from the lesson as if you observed it in the wild.",
             "Why should Indonesian students care about protecting endemic animals? Share your opinion.",
         ];
-        $items=[];for($i=0;$i<10;$i++){
+        $items=[];for($i=0;$i<$count;$i++){
             $key=ucfirst($words[$i%count($words)]);
             $base=['title'=>ucfirst($skill).' Practice '.($i+1),'instruction'=>$this->instruction($skill,$level),'competency'=>ucfirst($skill).' · contextual response','source_excerpt'=>$excerpt,'level'=>$level];
             if($skill==='reading'){

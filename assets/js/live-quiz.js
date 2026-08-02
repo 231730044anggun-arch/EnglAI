@@ -34,11 +34,31 @@ function meta(question){const row=node("div","", "row");row.append(node("span",q
 function objective(question,game){const choices=node("div","", "choices");if(question.submitted)choices.append(node("p","Answer Submitted · Waiting for Other Players","muted"));else question.options.forEach((option,index)=>{const letter=String.fromCharCode(65+index),button=node("button","", "choice");button.type="button";button.append(node("b",letter),node("span",option));button.addEventListener("click",()=>submit({answer:letter},button));choices.append(button)});game.append(meta(question),node("p",question.question,"question"),choices)}
 function pickBestVoice(lang){
   const voices=speechSynthesis.getVoices();
-  // Priority: neural/premium > Google > Microsoft > any English
-  const preferred=['Google US English','Google UK English Female','Microsoft Zira','Microsoft David','Samantha','Daniel'];
-  for(const name of preferred){const v=voices.find(v=>v.name===name);if(v)return v;}
-  // Fallback: any en-US, then any en-*
-  return voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'))||null;
+  if(!voices||voices.length===0)return null;
+  const enVoices=voices.filter(v=>v.lang.toLowerCase().startsWith("en"));
+  if(enVoices.length===0)return null;
+  enVoices.sort((a,b)=>{
+    const aNat=/natural|online|neural|premium/i.test(a.name);
+    const bNat=/natural|online|neural|premium/i.test(b.name);
+    if(aNat&&!bNat)return-1;
+    if(!aNat&&bNat)return 1;
+    const aG=/google/i.test(a.name);
+    const bG=/google/i.test(b.name);
+    if(aG&&!bG)return-1;
+    if(!aG&&bG)return 1;
+    const preferredNames=['Google US English','Google UK English Female','Microsoft Zira','Microsoft David','Samantha','Daniel'];
+    const aPrefIndex=preferredNames.indexOf(a.name);
+    const bPrefIndex=preferredNames.indexOf(b.name);
+    if(aPrefIndex!==-1&&bPrefIndex===-1)return-1;
+    if(aPrefIndex===-1&&bPrefIndex!==-1)return 1;
+    if(aPrefIndex!==-1&&bPrefIndex!==-1)return aPrefIndex-bPrefIndex;
+    const aUS=a.lang.toLowerCase()==='en-us';
+    const bUS=b.lang.toLowerCase()==='en-us';
+    if(aUS&&!bUS)return-1;
+    if(!aUS&&bUS)return 1;
+    return 0;
+  });
+  return enVoices[0];
 }
 let voicesReady=false;
 if(speechSynthesis.onvoiceschanged!==undefined)speechSynthesis.onvoiceschanged=()=>{voicesReady=true;};
@@ -110,7 +130,7 @@ function listening(question,game){
     speechSynthesis.cancel();
     const utter=new SpeechSynthesisUtterance(script);
     utter.lang=lang;
-    utter.rate=rate;
+    utter.rate=Math.max(0.95, rate);
     utter.pitch=pitch;
     utter.volume=1;
     const voice=pickBestVoice(lang);

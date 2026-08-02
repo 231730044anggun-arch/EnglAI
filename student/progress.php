@@ -290,6 +290,189 @@ $skillColors = [
         grid-template-columns: 1fr;
     }
 }
+
+/* Modal Styling */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 10000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(7, 7, 26, 0.85); 
+    backdrop-filter: blur(8px);
+}
+.modal-content {
+    background: #0f1035; 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    margin: 5% auto; 
+    padding: 32px; 
+    width: min(800px, 95%); 
+    border-radius: 24px; 
+    position: relative; 
+    box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+    animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.close {
+    position: absolute; 
+    right: 24px; 
+    top: 24px; 
+    background: rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    color: #94a3b8; 
+    font-size: 20px; 
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: background 0.2s, color 0.2s;
+}
+.close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+.modal-body {
+    max-height: 70vh; 
+    overflow-y: auto; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 16px; 
+    padding-right: 8px;
+    margin-top: 16px;
+}
+.attempt-detail-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 20px;
+    transition: border-color 0.2s;
+}
+.attempt-detail-item:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.detail-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+    color: #fff;
+}
+.detail-badge-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.detail-section {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.detail-section-title {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+.option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+.option-item {
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+}
+.option-item.correct {
+    background: rgba(52, 211, 153, 0.08);
+    border-color: rgba(52, 211, 153, 0.3);
+    color: #34d399;
+}
+.option-item.incorrect {
+    background: rgba(248, 113, 113, 0.08);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: #f87171;
+}
+.option-letter {
+    font-weight: 800;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    display: grid;
+    place-items: center;
+    font-size: 0.8rem;
+}
+.option-item.correct .option-letter {
+    background: #34d399;
+    color: #07071a;
+}
+.option-item.incorrect .option-letter {
+    background: #f87171;
+    color: #fff;
+}
+.explanation-box {
+    background: rgba(124, 58, 237, 0.05);
+    border: 1px dashed rgba(124, 58, 237, 0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 10px;
+    font-size: 0.88rem;
+}
+.collapsible-trigger {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    transition: background 0.2s;
+}
+.collapsible-trigger:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+.collapsible-content {
+    display: none;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+.collapsible-content p {
+    margin: 0;
+}
 </style>
 </head>
 <body>
@@ -361,6 +544,8 @@ $skillColors = [
                                     <span style="color: #34d399; font-weight: 700; background: rgba(52, 211, 153, 0.08); padding: 2px 6px; border-radius: 4px;">✓ <?=(int)$row['correct_count']?> Bener</span>
                                     <span style="opacity: 0.3;">•</span>
                                     <span style="color: #f87171; font-weight: 700; background: rgba(248, 113, 113, 0.08); padding: 2px 6px; border-radius: 4px;">✗ <?=(int)$row['incorrect_count']?> Salah</span>
+                                    <span style="opacity: 0.3;">•</span>
+                                    <button type="button" class="button secondary small btn-view-detail" data-skill="<?=htmlspecialchars((string)$row['skill'])?>" data-level="<?=htmlspecialchars((string)$row['level'])?>" style="margin: 0; padding: 2px 8px; font-size: 0.7rem; border-radius: 6px; height: auto; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff;">🔍 Detail</button>
                                 <?php endif; ?>
                             </span>
                             <span class="score-badge">
@@ -475,6 +660,301 @@ $skillColors = [
     </section>
 </main>
 
+<!-- Detail Modal -->
+<div id="detail-modal" class="modal">
+    <div class="modal-content card">
+        <button type="button" class="close" id="close-modal" aria-label="Close">&times;</button>
+        <span class="eyebrow" id="modal-eyebrow">Detail Latihan Mandiri</span>
+        <h2 id="modal-title" style="margin: 4px 0 20px 0;">Skill &amp; Level</h2>
+        <div id="modal-body" class="modal-body">
+            <div class="empty">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const modal = document.getElementById("detail-modal");
+    const closeModal = document.getElementById("close-modal");
+    const modalTitle = document.getElementById("modal-title");
+    const modalBody = document.getElementById("modal-body");
+
+    if (!modal || !closeModal) return;
+
+    closeModal.addEventListener("click", () => {
+        modal.style.display = "none";
+    });
+
+    window.addEventListener("click", (e) => {
+        if (e.target === modal) {
+            modal.style.display = "none";
+        }
+    });
+
+    function el(tag, attrs = {}, children = []) {
+        const element = document.createElement(tag);
+        for (const [key, val] of Object.entries(attrs)) {
+            if (key === 'style' && typeof val === 'object') {
+                Object.assign(element.style, val);
+            } else if (key === 'className') {
+                element.className = val;
+            } else if (key.startsWith('data-')) {
+                element.setAttribute(key, val);
+            } else {
+                element[key] = val;
+            }
+        }
+        children.forEach(child => {
+            if (typeof child === 'string' || typeof child === 'number') {
+                element.appendChild(document.createTextNode(String(child)));
+            } else if (child instanceof HTMLElement) {
+                element.appendChild(child);
+            }
+        });
+        return element;
+    }
+
+    document.querySelectorAll(".btn-view-detail").forEach(btn => {
+        btn.addEventListener("click", function() {
+            const skill = this.dataset.skill;
+            const level = this.dataset.level;
+            
+            modalTitle.textContent = `${skill.charAt(0).toUpperCase() + skill.slice(1)} - ${level.charAt(0).toUpperCase() + level.slice(1)}`;
+            
+            modalBody.replaceChildren(
+                el('div', { style: { textAlign: 'center', padding: '40px 0' } }, [
+                    el('span', { style: { display: 'inline-block', width: '30px', height: '30px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '10px' } }),
+                    el('p', { className: 'muted' }, ['Loading details...'])
+                ])
+            );
+            modal.style.display = "block";
+
+            fetch(`/student/progress_detail.php?skill=${skill}&level=${level}`)
+                .then(res => {
+                    if (!res.ok) throw new Error("Gagal mengambil data.");
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data.success || !data.attempts || data.attempts.length === 0) {
+                        modalBody.replaceChildren(el('div', { className: 'empty' }, ['Tidak ada aktivitas tersimpan.']));
+                        return;
+                    }
+
+                    const fragment = document.createDocumentFragment();
+                    data.attempts.forEach((a, index) => {
+                        const scoreColor = a.score >= 70 ? '#34d399' : '#f87171';
+                        const isObjective = ['reading', 'listening'].includes(a.skill);
+                        
+                        const itemEl = el('div', { className: 'attempt-detail-item' }, [
+                            el('div', { className: 'detail-header' }, [
+                                el('h4', { className: 'detail-title' }, [`#${data.attempts.length - index}: ${a.title || 'Latihan'}`]),
+                                el('div', { className: 'detail-badge-group' }, [
+                                    el('span', { className: 'badge', style: { color: scoreColor, borderColor: scoreColor + '50', background: scoreColor + '08', fontWeight: 'bold', fontSize: '0.85rem' } }, [`Score: ${a.score}/100`]),
+                                    el('span', { className: 'badge', style: { fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.05)' } }, [
+                                        new Date(a.submitted_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})
+                                    ])
+                                ])
+                            ])
+                        ]);
+
+                        if (a.instruction) {
+                            itemEl.appendChild(el('p', { className: 'muted', style: { fontSize: '0.85rem', margin: '-4px 0 10px 0' } }, [
+                                el('i', {}, [`Instruction: ${a.instruction}`])
+                            ]));
+                        }
+
+                        function addCollapsible(titleText, contentText) {
+                            const btn = el('button', { type: 'button', className: 'collapsible-trigger' }, [titleText]);
+                            const content = el('div', { className: 'collapsible-content' });
+                            
+                            contentText.split('\n').forEach(line => {
+                                content.appendChild(el('p', {}, [line]));
+                            });
+
+                            btn.addEventListener('click', function() {
+                                if (content.style.display === 'block') {
+                                    content.style.display = 'none';
+                                    btn.textContent = titleText.replace("Hide", "Show");
+                                } else {
+                                    content.style.display = 'block';
+                                    btn.textContent = titleText.replace("Show", "Hide");
+                                }
+                            });
+                            itemEl.appendChild(btn);
+                            itemEl.appendChild(content);
+                        }
+
+                        const passage = a.question_data.passage;
+                        if (passage) {
+                            addCollapsible('📖 Show Passage / Context', passage);
+                        }
+                        const transcript = a.question_data.transcript;
+                        if (a.skill === 'listening' && transcript) {
+                            addCollapsible('🎧 Show Listening Script / Transcript', transcript);
+                        }
+                        const scenario = a.question_data.scenario;
+                        if (a.skill === 'speaking' && scenario) {
+                            addCollapsible('🎤 Show Speaking Scenario', scenario);
+                        }
+                        const context = a.question_data.context;
+                        if (a.skill === 'writing' && context) {
+                            addCollapsible('✍️ Show Writing Context', context);
+                        }
+
+                        if (a.question_data.question) {
+                            itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                el('div', { className: 'detail-section-title' }, ['Question / Prompt']),
+                                el('p', { style: { fontWeight: '600', margin: '4px 0 0 0', color: '#fff', fontSize: '0.95rem' } }, [a.question_data.question])
+                            ]));
+                        }
+
+                        if (isObjective && a.question_data.options && a.answer_json) {
+                            const selectedLetter = a.answer_json.selected;
+                            const correctLetter = a.answer_json.correct_answer;
+                            
+                            const optionChildren = [];
+                            a.question_data.options.forEach((optText, optIdx) => {
+                                const letter = String.fromCharCode(65 + optIdx);
+                                let optClass = '';
+                                if (letter === correctLetter) {
+                                    optClass = 'correct';
+                                } else if (letter === selectedLetter) {
+                                    optClass = 'incorrect';
+                                }
+                                
+                                const labelChilds = [optText];
+                                if (letter === selectedLetter) {
+                                    labelChilds.push(el('small', { style: { marginLeft: 'auto', fontWeight: 'bold' } }, [' (Your Answer)']));
+                                }
+                                if (letter === correctLetter && letter !== selectedLetter) {
+                                    labelChilds.push(el('small', { style: { marginLeft: 'auto', fontWeight: 'bold' } }, [' (Correct Answer)']));
+                                }
+
+                                optionChildren.push(el('div', { className: `option-item ${optClass}` }, [
+                                    el('span', { className: 'option-letter' }, [letter]),
+                                    el('span', {}, labelChilds)
+                                ]));
+                            });
+
+                            const optSection = el('div', { className: 'detail-section' }, [
+                                el('div', { className: 'detail-section-title' }, ['Answers']),
+                                el('div', { className: 'option-list' }, optionChildren)
+                            ]);
+
+                            if (a.question_data.explanation) {
+                                optSection.appendChild(el('div', { className: 'explanation-box' }, [
+                                    el('b', {}, ['Explanation: ']),
+                                    a.question_data.explanation
+                                ]));
+                            }
+                            itemEl.appendChild(optSection);
+                        }
+
+                        if (!isObjective) {
+                            const submissionText = a.skill === 'speaking' ? a.transcript : a.writing_submission;
+                            
+                            const subContent = el('div', { style: { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#fff' } });
+                            (submissionText || '').split('\n').forEach(line => {
+                                subContent.appendChild(el('span', {}, [line]));
+                                subContent.appendChild(el('br'));
+                            });
+
+                            itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                el('div', { className: 'detail-section-title' }, ['Your Submission']),
+                                subContent
+                            ]));
+
+                            if (a.criteria_json && a.criteria_json.length > 0) {
+                                const critList = [];
+                                a.criteria_json.forEach(criterion => {
+                                    critList.push(el('div', { style: { background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '8px' } }, [
+                                        el('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px' } }, [
+                                            el('b', { style: { fontSize: '0.85rem', color: '#fff' } }, [criterion.name.replace(/_/g, ' ').toUpperCase()]),
+                                            el('span', { style: { fontSize: '0.85rem', fontWeight: 'bold', color: '#fbbf24' } }, [`${criterion.score}/${criterion.max || 100}`])
+                                        ]),
+                                        el('div', { style: { background: 'rgba(255,255,255,0.05)', height: '4px', borderRadius: '2px', marginBottom: '6px' } }, [
+                                            el('div', { style: { background: '#fbbf24', height: '100%', borderRadius: '2px', width: `${Math.max(0, Math.min(100, (criterion.score / (criterion.max || 100)) * 100))}%` } })
+                                        ]),
+                                        el('small', { style: { fontSize: '0.75rem', color: 'var(--muted)', display: 'block', lineHeight: '1.3' } }, [criterion.feedback])
+                                    ]));
+                                });
+                                itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                    el('div', { className: 'detail-section-title' }, ['AI Evaluation Breakdown']),
+                                    el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px', marginTop: '10px' } }, critList)
+                                ]));
+                            }
+
+                            if (a.feedback) {
+                                itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                    el('div', { className: 'detail-section-title' }, ['Overall AI Feedback']),
+                                    el('p', { className: 'muted', style: { margin: '4px 0 0 0', fontSize: '0.9rem', lineHeight: '1.5' } }, [a.feedback])
+                                ]));
+                            }
+
+                            if ((a.strengths_json && a.strengths_json.length > 0) || (a.improvements_json && a.improvements_json.length > 0)) {
+                                const strongList = [];
+                                const improveList = [];
+                                if (a.strengths_json && a.strengths_json.length > 0) {
+                                    const items = a.strengths_json.map(s => el('li', {}, [s]));
+                                    strongList.push(el('div', {}, [
+                                        el('div', { className: 'detail-section-title', style: { color: '#34d399' } }, ['Strengths']),
+                                        el('ul', { style: { margin: '6px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.4' } }, items)
+                                    ]));
+                                }
+                                if (a.improvements_json && a.improvements_json.length > 0) {
+                                    const items = a.improvements_json.map(s => el('li', {}, [s]));
+                                    improveList.push(el('div', {}, [
+                                        el('div', { className: 'detail-section-title', style: { color: '#f87171' } }, ['Improvements']),
+                                        el('ul', { style: { margin: '6px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.4' } }, items)
+                                    ]));
+                                }
+                                itemEl.appendChild(el('div', { className: 'detail-section', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' } }, [
+                                    ...strongList,
+                                    ...improveList
+                                ]));
+                            }
+
+                            if (a.suggested_revision) {
+                                const revBox = el('div', { style: { background: 'rgba(251,191,36,0.03)', border: '1px dashed rgba(251,191,36,0.2)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#fcd34d' } });
+                                a.suggested_revision.split('\n').forEach(line => {
+                                    revBox.appendChild(el('span', {}, [line]));
+                                    revBox.appendChild(el('br'));
+                                });
+                                itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                    el('div', { className: 'detail-section-title', style: { color: '#fbbf24' } }, ['Suggested Revision']),
+                                    revBox
+                                ]));
+                            }
+
+                            if (a.example_answer) {
+                                const exBox = el('div', { style: { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.5', color: '#cbd5e1' } });
+                                a.example_answer.split('\n').forEach(line => {
+                                    exBox.appendChild(el('span', {}, [line]));
+                                    exBox.appendChild(el('br'));
+                                });
+                                itemEl.appendChild(el('div', { className: 'detail-section' }, [
+                                    el('div', { className: 'detail-section-title' }, ['Model Answer / Example Response']),
+                                    exBox
+                                ]));
+                            }
+                        }
+
+                        fragment.appendChild(itemEl);
+                    });
+                    modalBody.replaceChildren(fragment);
+                })
+                .catch(err => {
+                    modalBody.replaceChildren(el('div', { className: 'alert error' }, [err.message]));
+                });
+        });
+    });
+});
+</script>
+<style>
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
 <script src="/assets/js/visual-effects.js" defer></script>
 </body>
 </html>
