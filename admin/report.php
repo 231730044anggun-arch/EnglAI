@@ -193,14 +193,18 @@ function skillBar(float $pct):string{$c=$pct>=80?'#10b981':($pct>=60?'#3b82f6':(
         $sc=$pct>=70?'score-high':($pct>=40?'score-mid':'score-low');
         $isReview=$r['review_status']==='Needs Review';
       ?>
-      <tr <?=$isReview?'style="background:#fff1f2"':''?>>
+      <?php
+        $badgeCls = $isReview ? 'badge-practice' : 'badge-mastered';
+        $pctClass = $pct>=70 ? 'score-high' : ($pct>=40 ? 'score-mid' : 'score-low');
+      ?>
+      <tr <?=$isReview ? 'style="background:#fff1f2"' : ''?>>
         <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=sc(mb_strimwidth($r['question'],0,80,'…'))?></td>
         <td><?=ucfirst($r['skill'])?></td>
         <td><?=ucfirst($r['difficulty']??'—')?></td>
         <td style="text-align:center"><?=(int)$r['attempts']?></td>
-        <td class="score-cell <?=$sc?>"><?=number_format($pct,1)?>%</td>
+        <td class="score-cell <?=$pctClass?>"><?=number_format($pct,1)?>%</td>
         <td><?=(int)$r['average_response_ms']?> ms</td>
-        <td><span class="badge <?=$isReview?'badge-practice':'badge-mastered'?>"><?=$r['review_status']?></span></td>
+        <td><span class="badge <?=$badgeCls?>"><?=$r['review_status']?></span></td>
       </tr>
       <?php endforeach;?>
       </tbody>
