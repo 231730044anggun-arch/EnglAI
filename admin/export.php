@@ -8,10 +8,12 @@ $classroom = (new ClassroomService(db()))->requireOwned($cid,$actor);
 $data = (new AnalyticsService(db()))->classroom($cid);
 
 // Student gradebook
-$q = db()->prepare("SELECT m.id,m.display_name,m.created_at,m.last_seen_at,
+$q = db()->prepare("SELECT m.id,m.display_name,m.created_at,m.last_seen_at,u.name as user_name,u.email as user_email,
     (SELECT COUNT(*) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') completed,
     (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') avg_score
-  FROM classroom_members m WHERE m.classroom_id=? ORDER BY avg_score DESC,m.display_name ASC");
+  FROM classroom_members m
+  LEFT JOIN users u ON u.id = m.user_id
+  WHERE m.classroom_id=? ORDER BY avg_score DESC,m.display_name ASC");
 $q->execute([$cid,$cid,$cid]);
 $students = $q->fetchAll();
 
@@ -139,7 +141,8 @@ function gradeFrom(float $avg):string{return $avg>=90?'A':($avg>=80?'B':($avg>=7
         ?>
         <tr>
           <td style="color:#94a3b8;font-weight:600"><?=$i+1?></td>
-          <td><b><?=he($st['display_name']?:'Joined Student')?></b></td>
+          <?php $displayName = $st['display_name'] ?: $st['user_name'] ?: $st['user_email'] ?: ('Student #' . ($st['user_id'] ?: $st['id'])); ?>
+          <td><b><?=he($displayName)?></b></td>
           <td><?=he(substr((string)$st['created_at'],0,10))?></td>
           <td><?=$st['last_seen_at']?he(substr((string)$st['last_seen_at'],0,10)):'—'?></td>
           <td><?=(int)$st['completed']?> exercises</td>

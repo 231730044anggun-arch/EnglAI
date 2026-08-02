@@ -7,7 +7,7 @@ $data=(new AnalyticsService(db()))->classroom($cid);
 $q=db()->prepare('SELECT original_name FROM classroom_lesson_plans WHERE classroom_id=? AND is_active=1 ORDER BY version DESC LIMIT 1');$q->execute([$cid]);$rpp=(string)($q->fetchColumn()?:'—');
 
 // Fetch student roster
-$q=db()->prepare("SELECT m.id,m.display_name,m.created_at,m.last_seen_at,(SELECT COUNT(*) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') completed,(SELECT ROUND(AVG(a.score),1) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') avg_score FROM classroom_members m WHERE m.classroom_id=? ORDER BY avg_score DESC,m.display_name ASC");$q->execute([$cid,$cid,$cid]);$students=$q->fetchAll();
+$q=db()->prepare("SELECT m.id,m.display_name,m.created_at,m.last_seen_at,u.name as user_name,u.email as user_email,(SELECT COUNT(*) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') completed,(SELECT ROUND(AVG(a.score),1) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') avg_score FROM classroom_members m LEFT JOIN users u ON u.id = m.user_id WHERE m.classroom_id=? ORDER BY avg_score DESC,m.display_name ASC");$q->execute([$cid,$cid,$cid]);$students=$q->fetchAll();
 
 (new AuditService(db()))->record($cid,$actor,'report.exported','print_report',null,[],['type'=>'classroom_print']);
 function sc(mixed $v):string{return htmlspecialchars((string)($v??''),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');}
@@ -167,7 +167,8 @@ function skillBar(float $pct):string{$c=$pct>=80?'#10b981':($pct>=60?'#3b82f6':(
       ?>
       <tr>
         <td style="color:#94a3b8;font-weight:600"><?=$i+1?></td>
-        <td><b><?=sc($st['display_name']?:'Joined Student')?></b></td>
+        <?php $displayName = $st['display_name'] ?: $st['user_name'] ?: $st['user_email'] ?: ('Student #' . ($st['user_id'] ?: $st['id'])); ?>
+        <td><b><?=sc($displayName)?></b></td>
         <td><?=sc(substr((string)$st['created_at'],0,10))?></td>
         <td><?=$st['last_seen_at']?sc(substr((string)$st['last_seen_at'],0,10)):'—'?></td>
         <td style="text-align:center"><b><?=(int)$st['completed']?></b></td>

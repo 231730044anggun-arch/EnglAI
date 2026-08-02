@@ -13,23 +13,23 @@ final class ExportService {
         $stream = fopen('php://temp', 'r+');
         fwrite($stream, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
 
-        // Set clean CSV headers
+        // Set clean CSV headers with unit indicators
         fputcsv($stream, [
             'Student Name',
             'Member ID',
             'Joined Date',
             'Last Active',
             'Completed Exercises',
-            'Average Score',
+            'Average Score (%)',
             'Grade',
-            'Reading Avg',
-            'Listening Avg',
-            'Speaking Avg',
-            'Writing Avg'
+            'Reading Avg (%)',
+            'Listening Avg (%)',
+            'Speaking Avg (%)',
+            'Writing Avg (%)'
         ]);
 
         $q = $this->pdo->prepare("
-            SELECT m.id, m.display_name, m.user_id, m.created_at, m.last_seen_at,
+            SELECT m.id, m.display_name, m.user_id, m.created_at, m.last_seen_at, u.name as user_name, u.email as user_email,
                 (SELECT COUNT(*) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') as completed_attempts,
                 (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed') as avg_score,
                 (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a JOIN learning_activities la ON la.id=a.activity_id WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed' AND la.skill='reading') as reading_avg,
@@ -37,6 +37,7 @@ final class ExportService {
                 (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a JOIN learning_activities la ON la.id=a.activity_id WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed' AND la.skill='speaking') as speaking_avg,
                 (SELECT ROUND(AVG(a.score),1) FROM learning_attempts a JOIN learning_activities la ON la.id=a.activity_id WHERE a.member_id=m.id AND a.classroom_id=? AND a.status='completed' AND la.skill='writing') as writing_avg
             FROM classroom_members m
+            LEFT JOIN users u ON u.id = m.user_id
             WHERE m.classroom_id=?
             ORDER BY avg_score DESC, m.display_name ASC
         ");
@@ -44,21 +45,23 @@ final class ExportService {
         $students = $q->fetchAll();
 
         foreach ($students as $s) {
-            $avg = $s['avg_score'] !== null ? (float)$s['avg_score'] : 0.0;
-            $grade = $s['avg_score'] !== null ? ($avg >= 90 ? 'A' : ($avg >= 80 ? 'B' : ($avg >= 70 ? 'C' : ($avg >= 60 ? 'D' : 'E')))) : '—';
+            $avg = $s['avg_score'] !== null ? (float)$s['avg_score'] : null;
+            $grade = $avg !== null ? ($avg >= 90 ? 'A' : ($avg >= 80 ? 'B' : ($avg >= 70 ? 'C' : ($avg >= 60 ? 'D' : 'E')))) : '';
             
+            $displayName = $s['display_name'] ?: $s['user_name'] ?: $s['user_email'] ?: ('Student #' . ($s['user_id'] ?: $s['id']));
+
             fputcsv($stream, [
-                self::safeCell($s['display_name'] ?: 'Joined Student'),
-                self::safeCell('Member #' . $s['user_id']),
+                self::safeCell($displayName),
+                self::safeCell('Member #' . ($s['user_id'] ?: $s['id'])),
                 self::safeCell(substr((string)$s['created_at'], 0, 10)),
-                self::safeCell($s['last_seen_at'] ? substr((string)$s['last_seen_at'], 0, 10) : '—'),
+                self::safeCell($s['last_seen_at'] ? substr((string)$s['last_seen_at'], 0, 10) : ''),
                 self::safeCell((string)$s['completed_attempts']),
-                self::safeCell($s['avg_score'] !== null ? $s['avg_score'] . '%' : '—'),
+                self::safeCell($avg !== null ? (string)$avg : ''),
                 self::safeCell($grade),
-                self::safeCell($s['reading_avg'] !== null ? $s['reading_avg'] . '%' : '—'),
-                self::safeCell($s['listening_avg'] !== null ? $s['listening_avg'] . '%' : '—'),
-                self::safeCell($s['speaking_avg'] !== null ? $s['speaking_avg'] . '%' : '—'),
-                self::safeCell($s['writing_avg'] !== null ? $s['writing_avg'] . '%' : '—')
+                self::safeCell($s['reading_avg'] !== null ? (string)$s['reading_avg'] : ''),
+                self::safeCell($s['listening_avg'] !== null ? (string)$s['listening_avg'] : ''),
+                self::safeCell($s['speaking_avg'] !== null ? (string)$s['speaking_avg'] : ''),
+                self::safeCell($s['writing_avg'] !== null ? (string)$s['writing_avg'] : '')
             ]);
         }
 
