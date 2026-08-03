@@ -21,12 +21,12 @@ function fail(string $message, int $status = 400): never
 
 function gemini_json(string $prompt): array
 {
-    $key = getenv('GEMINI_API_KEY') ?: '';
+    $key = env_value('GEMINI_API_KEY') ?: '';
     if ($key === '') {
         fail('API key Gemini belum dikonfigurasi.', 500);
     }
 
-    $primaryModel = getenv('GEMINI_MODEL') ?: 'gemini-3.5-flash-lite';
+    $primaryModel = env_value('GEMINI_MODEL') ?: 'gemini-3.5-flash-lite';
 
     // Fallback models to try if primary model hits quota/overload
     $fallbackModels = [
@@ -189,9 +189,9 @@ if ($mode === 'speaking') {
 
     $prompt = "Anda adalah pelatih pronunciation bahasa Inggris untuk siswa SMP Indonesia.
 
-Gunakan HANYA materi RPP berikut.
+Gunakan HANYA materi pembelajaran berikut.
 
-Jangan mengambil informasi dari luar RPP.
+Jangan mengambil informasi dari luar materi pembelajaran.
 
 Buat SATU latihan pronunciation.
 
@@ -206,23 +206,24 @@ Kembalikan JSON valid saja:
 \"u\":{$unit}
 }
 
-RPP:
+Materi Pembelajaran:
 {$material}";
 
 } else {
 
     $prompt = "Anda adalah pembuat soal Bahasa Inggris SMP.
 
-Gunakan HANYA materi RPP berikut.
+Gunakan HANYA materi pembelajaran berikut.
 
-Jangan mengambil informasi dari luar RPP.
+Jangan mengambil informasi dari luar materi pembelajaran.
 
 Buat tepat SATU soal pilihan ganda.
 
 4 opsi.
-1 jawaban benar.
 
-Kembalikan JSON valid saja:
+Untuk meragamkan kunci jawaban, Anda harus merandom letak jawaban benar antara opsi A, B, C, atau D secara acak di setiap pemanggilan (misal: kadang jawaban yang benar di A, kadang di B, kadang di C, kadang di D). Jangan selalu menaruh jawaban benar di opsi A!
+
+Kembalikan JSON valid saja dengan format berikut (di mana ans adalah opsi jawaban yang benar, bernilai 'A', 'B', 'C', atau 'D'):
 
 {
 \"u\":{$unit},
@@ -234,14 +235,14 @@ Kembalikan JSON valid saja:
 \"dif\":\"{$difficulty}\"
 }
 
-RPP:
+Materi Pembelajaran:
 {$material}";
 }
 
 $provider = new GeminiProvider(
-    getenv('GEMINI_API_KEY') ?: '',
-    getenv('GEMINI_MODEL') ?: 'gemini-2.5-flash',
-    max(5, min(60, (int) (getenv('GEMINI_TIMEOUT_SECONDS') ?: 45)))
+    env_value('GEMINI_API_KEY') ?: '',
+    env_value('GEMINI_MODEL') ?: 'gemini-3.5-flash',
+    max(5, min(60, (int) (env_value('GEMINI_TIMEOUT_SECONDS') ?: 45)))
 );
 $service = new AIContentService(
     $provider,

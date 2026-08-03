@@ -35,6 +35,15 @@ $zip->close();
 $created[] = $docx;
 check($validator->validate($fileArray($docx, 'valid.docx'))['extension'] === 'docx', 'DOCX valid harus diterima validator.');
 
+$pptx = $directory . '/valid.pptx';
+$zip = new ZipArchive();
+$zip->open($pptx, ZipArchive::CREATE);
+$zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
+$zip->addFromString('ppt/presentation.xml', '<?xml version="1.0"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"></p:presentation>');
+$zip->close();
+$created[] = $pptx;
+check($validator->validate($fileArray($pptx, 'valid.pptx'))['extension'] === 'pptx', 'PPTX valid harus diterima validator.');
+
 $plainZip = $directory . '/fake.docx';
 $zip = new ZipArchive();
 $zip->open($plainZip, ZipArchive::CREATE);
@@ -43,8 +52,20 @@ $zip->close();
 $created[] = $plainZip;
 check($rejects($fileArray($plainZip, 'fake.docx')), 'ZIP yang diganti menjadi DOCX harus ditolak.');
 
+$plainZipPptx = $directory . '/fake.pptx';
+$zip = new ZipArchive();
+$zip->open($plainZipPptx, ZipArchive::CREATE);
+$zip->addFromString('readme.txt', 'not a pptx');
+$zip->close();
+$created[] = $plainZipPptx;
+check($rejects($fileArray($plainZipPptx, 'fake.pptx')), 'ZIP yang diganti menjadi PPTX harus ditolak.');
+
 $corrupt = $makeFile('corrupt.docx', 'PK broken archive');
 check($rejects($fileArray($corrupt, 'corrupt.docx')), 'DOCX rusak harus ditolak.');
+
+$corruptPptx = $makeFile('corrupt.pptx', 'PK broken archive');
+check($rejects($fileArray($corruptPptx, 'corrupt.pptx')), 'PPTX rusak harus ditolak.');
+
 check($rejects($fileArray($pdf, 'oversize.pdf', RppUploadValidator::MAX_BYTES + 1)), 'File melebihi batas harus ditolak.');
 check($rejects($fileArray($pdf, 'wrong.docx')), 'MIME/extension yang tidak sesuai harus ditolak.');
 

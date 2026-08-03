@@ -518,8 +518,8 @@ $allActivitiesJson = json_encode($allActivities, JSON_UNESCAPED_UNICODE | JSON_U
                         <div class="dropzone" data-dropzone>
                             <div class="icon-box" style="margin:auto">⇧</div>
                             <h3>Drag & drop lesson plan</h3>
-                            <p class="muted" data-file-status>PDF atau DOCX · Maksimal 15 MB</p>
-                            <input type="file" name="rpp_file" accept=".pdf,.docx" required>
+                            <p class="muted" data-file-status>PDF, DOCX, atau PPTX · Maksimal 15 MB</p>
+                            <input type="file" name="rpp_file" accept=".pdf,.docx,.pptx" required>
                             <?= Csrf::field() ?>
                             <input type="hidden" name="classroom_id" value="<?= $id ?>">
                             <button class="button primary">Upload & Extract RPP</button>
@@ -597,6 +597,7 @@ $allActivitiesJson = json_encode($allActivities, JSON_UNESCAPED_UNICODE | JSON_U
                             <div>
                                 <label style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block;">Difficulty Level</label>
                                 <select name="level" style="margin-bottom: 0; border-radius: 10px; background: rgba(255,255,255,0.05);">
+                                    <option value="all">All Levels (Basic, Intermediate, Advanced)</option>
                                     <?php foreach (['basic', 'intermediate', 'advanced'] as $level): ?>
                                         <option value="<?= $level ?>" <?= $classroom['default_level'] === $level ? 'selected' : '' ?>><?= ucfirst($level) ?></option>
                                     <?php endforeach; ?>

@@ -23,7 +23,7 @@ final class AssessmentService
         $prompt="Assess this {$skill} submission using text only. The transcript is de-identified. When skill=speaking, do not score or claim audio pronunciation, phoneme, clarity, stress, intonation, or accent. \n"
               . "CRITICAL GRADING CONSTRAINT: If the submission is completely irrelevant to the prompt, contains gibberish, or is written/spoken in Indonesian (e.g. Indonesian greeting like 'assalamualaikum', 'selamat pagi', 'halo' without actual English response), you MUST grade all criteria and the total_score very strictly between 0 and 5 out of 100.\n"
               . "Return JSON only: total_score 0-100, maximum_score 100, criteria array of objects name,score,max_score,feedback; strengths array; improvements array; grammar_notes array; vocabulary_notes array; suggested_revision string; confidence 0-1; status completed|needs_review. Rubric: ".json_encode($rubric)."\nDe-identified learning context: ".json_encode($context)."\nTask: ".json_encode(['prompt'=>$content['prompt']??'','keywords'=>$content['keywords']??[]])."\nDe-identified transcript:\n".mb_substr($submission,0,12000);
-        $provider=new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-2.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45'));
+        $provider=new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-3.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45'));
         $last=null;for($attempt=0;$attempt<2;$attempt++){try{return $provider->generate($prompt);}catch(\Throwable $error){$last=$error;}}
         throw new \RuntimeException('Assessment provider unavailable.',0,$last);
     }

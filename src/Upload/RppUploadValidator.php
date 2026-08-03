@@ -21,14 +21,19 @@ final class RppUploadValidator
             throw new UploadValidationException('Ukuran file maksimal 15 MB.');
         }
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['pdf', 'docx'], true)) {
-            throw new UploadValidationException('Hanya file PDF atau DOCX yang diizinkan.');
+        if (!in_array($extension, ['pdf', 'docx', 'pptx'], true)) {
+            throw new UploadValidationException('Hanya file PDF, DOCX, atau PPTX yang diizinkan.');
         }
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($temporaryPath) ?: '';
         $allowed = [
             'pdf' => ['application/pdf'],
             'docx' => [
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/zip',
+                'application/octet-stream',
+            ],
+            'pptx' => [
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 'application/zip',
                 'application/octet-stream',
             ],
@@ -41,6 +46,9 @@ final class RppUploadValidator
         }
         if ($extension === 'docx') {
             $this->validateDocxStructure($temporaryPath);
+        }
+        if ($extension === 'pptx') {
+            $this->validatePptxStructure($temporaryPath);
         }
         return ['extension' => $extension, 'mime' => $mime, 'original_name' => $originalName];
     }
@@ -67,6 +75,21 @@ final class RppUploadValidator
                 $archive->close();
             }
             throw new UploadValidationException('Struktur DOCX tidak valid.');
+        }
+        $archive->close();
+    }
+
+    private function validatePptxStructure(string $path): void
+    {
+        $archive = new \ZipArchive();
+        $opened = $archive->open($path) === true;
+        if (!$opened
+            || $archive->locateName('[Content_Types].xml') === false
+            || $archive->locateName('ppt/presentation.xml') === false) {
+            if ($opened) {
+                $archive->close();
+            }
+            throw new UploadValidationException('Struktur PPTX tidak valid.');
         }
         $archive->close();
     }

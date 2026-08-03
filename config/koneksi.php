@@ -28,10 +28,6 @@ function load_env_file(string $path): void
         if (preg_match('/^(["\'])(.*)\1$/', $value, $matches)) {
             $value = $matches[2];
         }
-        if (getenv($key) !== false) {
-            continue;
-        }
-
         putenv($key . '=' . $value);
         $_ENV[$key] = $value;
         $_SERVER[$key] = $value;
@@ -43,7 +39,16 @@ load_env_file(dirname(__DIR__) . '/.env');
 function env_value(string $key, ?string $default = null): ?string
 {
     $value = getenv($key);
-    return $value === false ? $default : $value;
+    if ($value !== false) {
+        return $value;
+    }
+    if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+        return (string) $_ENV[$key];
+    }
+    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+        return (string) $_SERVER[$key];
+    }
+    return $default;
 }
 
 function env_bool(string $key, bool $default = false): bool

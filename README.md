@@ -18,7 +18,7 @@ Halaman game utama berada di `index.php`. Tampilan, animasi, timer, power-up, sk
 
    ```powershell
    $env:GEMINI_API_KEY = 'isi_api_key_anda'
-   $env:GEMINI_MODEL = 'gemini-2.5-flash'
+   $env:GEMINI_MODEL = 'gemini-3.5-flash'
    ```
 
 5. Jalankan migration dan test:

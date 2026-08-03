@@ -108,7 +108,7 @@ final class ContentBankGenerator
         }
         $provider = new GeminiProvider(
             $apiKey,
-            (string) env_value('GEMINI_MODEL', 'gemini-2.5-flash'),
+            (string) env_value('GEMINI_MODEL', 'gemini-3.5-flash'),
             (int) env_value('GEMINI_TIMEOUT_SECONDS', '45')
         );
         

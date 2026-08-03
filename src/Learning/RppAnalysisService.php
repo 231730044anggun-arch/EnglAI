@@ -21,7 +21,7 @@ final class RppAnalysisService
     private function fromAi(string $text): array
     {
         $key=(string)env_value('GEMINI_API_KEY','');if($key==='')throw new \RuntimeException('Provider unavailable.');
-        return (new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-2.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate("Analyze this English lesson plan. Return JSON only with topic string, learning_objectives array, competencies array, vocabulary array, grammar array, skill_focus array using reading/listening/speaking/writing, material_complexity string, recommended_level basic|intermediate|advanced, recommendation_reason string, source_excerpts array. RPP:\n".mb_substr($text,0,24000));
+        return (new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-3.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate("Analyze this English lesson material or text. Return JSON only with topic string, learning_objectives array, competencies array, vocabulary array, grammar array, skill_focus array using reading/listening/speaking/writing, material_complexity string, recommended_level basic|intermediate|advanced, recommendation_reason string, source_excerpts array. Material:\n".mb_substr($text,0,24000));
     }
     /** @return array<string,mixed> */
     private function fallback(string $text,string $name): array

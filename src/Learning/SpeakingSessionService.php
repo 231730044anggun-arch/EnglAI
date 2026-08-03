@@ -7,7 +7,8 @@ final class SpeakingSessionService
     public const TASKS=10;
     public function __construct(private readonly \PDO $pdo){}
     public function active(int $member,int $classroom,string $level): ?array {
-        $q=$this->pdo->prepare("SELECT * FROM speaking_sessions WHERE member_id=? AND classroom_id=? AND level=? AND status='active' ORDER BY id DESC LIMIT 1");$q->execute([$member,$classroom,Level::validate($level)]);return $q->fetch()?:null;
+        $q=$this->pdo->prepare("SELECT id FROM classroom_lesson_plans WHERE classroom_id=? AND is_active=1 ORDER BY version DESC LIMIT 1");$q->execute([$classroom]);$plan=(int)$q->fetchColumn();if(!$plan)return null;
+        $q=$this->pdo->prepare("SELECT * FROM speaking_sessions WHERE member_id=? AND classroom_id=? AND lesson_plan_id=? AND level=? AND status='active' ORDER BY id DESC LIMIT 1");$q->execute([$member,$classroom,$plan,Level::validate($level)]);return $q->fetch()?:null;
     }
     public function start(int $member,int $classroom,string $level,bool $new=false): array {
         $level=Level::validate($level);if(!$new&&($active=$this->active($member,$classroom,$level)))return $active;

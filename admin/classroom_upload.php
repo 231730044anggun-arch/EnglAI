@@ -10,6 +10,38 @@ require_admin();
 $id=(int)($_POST['classroom_id']??0);
 function classroom_redirect(int $id,string $message):never{header('Location: /admin/classroom.php?id='.$id.'&message='.rawurlencode($message));exit;}
 function mvp_element_text(mixed $element):string{$text=method_exists($element,'getText')?(string)$element->getText():'';foreach(['getElements','getRows','getCells'] as $method){if(method_exists($element,$method))foreach($element->$method() as $child)$text.=' '.mvp_element_text($child);}return $text;}
+function read_pptx(string $path): string {
+    $archive = new \ZipArchive();
+    if ($archive->open($path) !== true) {
+        throw new \RuntimeException('Gagal membuka file PPTX.');
+    }
+    $text = '';
+    $slideFiles = [];
+    for ($i = 0; $i < $archive->numFiles; $i++) {
+        $name = $archive->getNameIndex($i);
+        if (preg_match('/^ppt\/slides\/slide\d+\.xml$/i', $name)) {
+            $slideFiles[] = $name;
+        }
+    }
+    natsort($slideFiles);
+    foreach ($slideFiles as $slideFile) {
+        $content = $archive->getFromName($slideFile);
+        if ($content === false) {
+            continue;
+        }
+        $dom = new \DOMDocument();
+        $oldErrors = libxml_use_internal_errors(true);
+        if ($dom->loadXML($content)) {
+            $paragraphs = $dom->getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 't');
+            foreach ($paragraphs as $paragraph) {
+                $text .= ' ' . $paragraph->nodeValue;
+            }
+        }
+        libxml_use_internal_errors($oldErrors);
+    }
+    $archive->close();
+    return trim($text);
+}
 if($_SERVER['REQUEST_METHOD']!=='POST')classroom_redirect($id,'Gunakan form upload.');
 Csrf::requireValid($_POST['csrf_token']??null);
 $teacher=(string)($_SESSION['admin_username']??env_value('ADMIN_USERNAME','admin'));
@@ -19,6 +51,7 @@ $stored=bin2hex(random_bytes(16)).'.'.$valid['extension'];$target=dirname(__DIR_
 if(!move_uploaded_file((string)$file['tmp_name'],$target))classroom_redirect($id,'File tidak dapat disimpan.');
 try{
  if($valid['extension']==='pdf'){$text=(new \Smalot\PdfParser\Parser())->parseFile($target)->getText();}
+ elseif($valid['extension']==='pptx'){$text=read_pptx($target);}
  else{$doc=\PhpOffice\PhpWord\IOFactory::load($target);$text='';foreach($doc->getSections() as $section)foreach($section->getElements() as $element)$text.=' '.mvp_element_text($element);}
  $text=RppTextCleaner::clean($text);if($text==='')throw new RuntimeException('Dokumen tidak memiliki teks yang dapat dibaca.');
  $pdo=db();$pdo->beginTransaction();$pdo->prepare('UPDATE classroom_lesson_plans SET is_active=0 WHERE classroom_id=?')->execute([$id]);
