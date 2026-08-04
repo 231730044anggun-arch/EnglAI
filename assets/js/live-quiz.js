@@ -27,7 +27,7 @@ function avatarNode(avatarStr, className = "avatar") {
 }
 function replace(id,children){const host=document.getElementById(id);if(host)host.replaceChildren(...children)}
 function leaderboard(rows,finalState){replace("leaderboard",rows.map((row,index)=>{const item=node("li","");const nameSpan=node("span","");nameSpan.append(avatarNode(row.avatar,"avatar-mini"),document.createTextNode(" "+row.display_name+(row.achievement?" · "+row.achievement:"")));item.append(node("b","#"+(row.final_rank||index+1)),nameSpan,node("b",row.total_score+" pts"));return item}));if(finalState){const order=[rows[1],rows[0],rows[2]],classes=["second","first","third"],ranks=["2","1","3"];replace("podium",order.map((row,index)=>{if(!row)return node("div","");const item=node("div","",`podium-place ${classes[index]}`);item.append(node("div",ranks[index],"podium-rank"),avatarNode(row.avatar,"avatar"),node("b",row.display_name),node("div",row.total_score+" pts","muted"),node("small",row.achievement||"","badge available"));return item}))}}
-function showTimeoutPopup(onConfirm){
+function showTimeoutPopup(){
   const overlay=document.createElement("div");
   overlay.className="timeout-overlay";
   overlay.style.cssText="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,10,14,0.92);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;backdrop-filter:blur(12px);";
@@ -36,29 +36,15 @@ function showTimeoutPopup(onConfirm){
   const icon=document.createElement("div");
   icon.textContent="⏱️";
   icon.style.cssText="font-size:4.5rem;margin-bottom:20px;";
-  const title=document.createElement("h2");
-  title.textContent="Time's Up!";
+  const title=node("h2", "Time's Up!");
   title.style.cssText="color:#ef4444;font-size:2rem;margin:0 0 10px 0;";
-  const desc=document.createElement("p");
-  desc.style.cssText="color:#cbd5e1;margin:0;";
+  const desc=node("p", "Menunggu guru melanjutkan kuis...");
+  desc.style.cssText="color:#cbd5e1;margin:0;font-size:1rem;";
   card.append(icon,title,desc);
   overlay.append(card);
   document.body.appendChild(overlay);
-  
-  let secondsLeft=5;
-  desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
-  
-  const countdownInterval=setInterval(()=>{
-    secondsLeft--;
-    if(secondsLeft<=0){
-      clearInterval(countdownInterval);
-      overlay.remove();
-      if(onConfirm)onConfirm();
-    }else{
-      desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
-    }
-  },1000);
 }
+
 function timer(data){clearInterval(timerHandle);const text=document.getElementById("timer-text"),circle=document.getElementById("timer-value");if(!text||!circle||!data.deadline_epoch_ms)return;const offset=Date.now()-data.server_epoch_ms,full=Math.max(1,data.question?.timer_seconds||20),circ=188.5;const tick=()=>{const left=Math.max(0,(data.deadline_epoch_ms-(Date.now()-offset))/1000);text.textContent=Math.ceil(left)+"s";text.setAttribute("aria-label",`${Math.ceil(left)} seconds remaining`);circle.style.strokeDasharray=String(circ);circle.style.strokeDashoffset=String(circ*(1-left/full));circle.style.stroke=left<=5?"#ef4444":"#7c3aed";if(left<=0&&!data.question?.submitted&&!document.querySelector(".timeout-overlay")){clearInterval(timerHandle);showTimeoutPopup();}};tick();timerHandle=setInterval(tick,250)}
 function players(rows){replace("participants",rows.map(row=>{const item=node("div","", "player");item.append(avatarNode(row.avatar,"avatar"),node("b",row.display_name||"Joining…"),node("small","Connected","muted"));return item}))}
 function renderTeacher(data){document.getElementById("state").textContent=data.state;document.getElementById("participant-count").textContent=String(data.participants.length);players(data.participants);leaderboard(data.leaderboard,["FINISHED","CLOSED"].includes(data.state));const start=document.getElementById("start"),close=document.getElementById("close"),nextBtn=document.getElementById("next-btn");if(start)start.hidden=data.state!=="LOBBY";if(nextBtn)nextBtn.hidden=data.state!=="ACTIVE";if(close)close.hidden=!["LOBBY","FINISHED"].includes(data.state);const lobbyStatus = document.getElementById("lobby-status"), lobbyEyebrow = document.getElementById("lobby-eyebrow");if(lobbyStatus){lobbyStatus.textContent = data.state === "LOBBY" ? "● Waiting" : "● Active";lobbyStatus.className = "status " + (data.state === "LOBBY" ? "waiting" : "active");}if(lobbyEyebrow){lobbyEyebrow.textContent = data.state === "LOBBY" ? "Lobby" : "Active Quiz";}const q=document.getElementById("teacher-question");if(q){if(data.question){q.replaceChildren(node("span",`${data.question.skill} · Question ${data.current_index+1}/${data.question_count}`,"eyebrow"),node("p",data.question.question,"question"),node("p",`${data.submitted_count}/${data.participants.length} submitted · ${data.pending_assessments} assessment pending`,"muted"));timer(data)}else q.replaceChildren(node("p",data.state==="EVALUATING"?`AI Evaluating · ${data.pending_assessments} pending`:data.state==="LOBBY"?"Waiting for Students…":data.state,"muted"))}const podium=document.getElementById("podium");if(podium)podium.hidden=!["FINISHED","CLOSED"].includes(data.state);if(data.state==="FINISHED"&&!celebrated){celebrated=true;window.EnglAIVisuals?.confetti()}}
@@ -327,7 +313,55 @@ function speaking(question,game){
   game.append(meta(question),node("p",question.content.scenario||"","muted"),card);
 }
 function writing(question,game){const area=document.createElement("textarea");area.className="response-editor";area.placeholder="Write your response…";const key=`englai-live-${quizId}-${question.id}`,counter=node("p","0 words","muted"),limits=`${question.content.minimum_words||1}–${question.content.maximum_words||1000} words`;area.value=localStorage.getItem(key)||"";function count(){const words=area.value.trim()?area.value.trim().split(/\s+/).length:0;counter.textContent=`${words} words · required ${limits} · draft autosaved`;localStorage.setItem(key,area.value)}area.addEventListener("input",count);count();const send=node("button","Lock and submit","button gold");send.addEventListener("click",()=>submit({writing_submission:area.value},send));game.append(meta(question),node("p",question.content.context||"","muted"),node("p",question.question,"question"),area,counter,send)}
-function renderStudent(data){const oldOverlay=document.querySelector(".timeout-overlay");if(oldOverlay)oldOverlay.remove();document.getElementById("state").textContent=data.state;leaderboard(data.leaderboard,["FINISHED","CLOSED"].includes(data.state));const game=document.getElementById("game");if(!game)return;if(data.state==="LOBBY"){game.replaceChildren(node("span",data.mode==="final_challenge"?"Final Challenge Lobby":"Live Quiz Lobby","eyebrow"),node("h1","Waiting for Teacher…"),node("p","Identity tersimpan; reconnect tidak membuat participant baru.","muted"));return}if(data.state==="EVALUATING"){game.replaceChildren(node("span","AI Evaluating","eyebrow"),node("h1","Finalizing scores…"),node("p",`${data.pending_assessments} assessment pending. Fallback aktif jika provider timeout.`,"muted"));return}if(["FINISHED","CLOSED"].includes(data.state)){const review=node("a","Open Personal Review","button secondary");review.href=`/student/quiz_review.php?id=${quizId}`;game.replaceChildren(node("span","Final Results","eyebrow"),node("h1",data.mode==="final_challenge"?"English Master Challenge Complete":"Quiz Finished!","gradient-text"),node("p","Final Leaderboard dan achievement telah disimpan.","muted"),review);document.getElementById("podium").hidden=false;if(!celebrated){celebrated=true;window.EnglAIVisuals?.confetti()}return}if(data.state==="ACTIVE"&&data.question){timer(data);if(lastQuestion===data.question.id)return;lastQuestion=data.question.id;replays=0;game.replaceChildren();if(data.question.submitted){game.append(meta(data.question),node("h2",data.question.submitted.assessment_status==="PENDING"?"AI Evaluating":"Answer Submitted"),node("p","Waiting for Other Players","muted"));return}if(data.question.question_type==="listening_objective")listening(data.question,game);else if(data.question.question_type==="speaking_response")speaking(data.question,game);else if(data.question.question_type==="writing_response")writing(data.question,game);else objective(data.question,game)}}
+function renderStudent(data){
+  document.getElementById("state").textContent=data.state;
+  leaderboard(data.leaderboard,["FINISHED","CLOSED"].includes(data.state));
+  const game=document.getElementById("game");
+  if(!game)return;
+  if(data.state==="LOBBY"){
+    const oldOverlay=document.querySelector(".timeout-overlay");
+    if(oldOverlay)oldOverlay.remove();
+    game.replaceChildren(node("span",data.mode==="final_challenge"?"Final Challenge Lobby":"Live Quiz Lobby","eyebrow"),node("h1","Waiting for Teacher…"),node("p","Identity tersimpan; reconnect tidak membuat participant baru.","muted"));
+    return;
+  }
+  if(data.state==="EVALUATING"){
+    const oldOverlay=document.querySelector(".timeout-overlay");
+    if(oldOverlay)oldOverlay.remove();
+    game.replaceChildren(node("span","AI Evaluating","eyebrow"),node("h1","Finalizing scores…"),node("p",`${data.pending_assessments} assessment pending. Fallback aktif jika provider timeout.`,"muted"));
+    return;
+  }
+  if(["FINISHED","CLOSED"].includes(data.state)){
+    const oldOverlay=document.querySelector(".timeout-overlay");
+    if(oldOverlay)oldOverlay.remove();
+    const review=node("a","Open Personal Review","button secondary");
+    review.href=`/student/quiz_review.php?id=${quizId}`;
+    game.replaceChildren(node("span","Final Results","eyebrow"),node("h1",data.mode==="final_challenge"?"English Master Challenge Complete":"Quiz Finished!","gradient-text"),node("p","Final Leaderboard dan achievement telah disimpan.","muted"),review);
+    document.getElementById("podium").hidden=false;
+    if(!celebrated){
+      celebrated=true;
+      window.EnglAIVisuals?.confetti();
+    }
+    return;
+  }
+  if(data.state==="ACTIVE"&&data.question){
+    timer(data);
+    if(lastQuestion===data.question.id)return;
+    const oldOverlay=document.querySelector(".timeout-overlay");
+    if(oldOverlay)oldOverlay.remove();
+    lastQuestion=data.question.id;
+    replays=0;
+    game.replaceChildren();
+    if(data.question.submitted){
+      game.append(meta(data.question),node("h2",data.question.submitted.assessment_status==="PENDING"?"AI Evaluating":"Answer Submitted"),node("p","Waiting for Other Players","muted"));
+      return;
+    }
+    if(data.question.question_type==="listening_objective")listening(data.question,game);
+    else if(data.question.question_type==="speaking_response")speaking(data.question,game);
+    else if(data.question.question_type==="writing_response")writing(data.question,game);
+    else objective(data.question,game);
+  }
+}
+
 async function submit(payload,button){if(busy)return;busy=true;document.querySelectorAll("button.choice").forEach(item=>item.disabled=true);button.disabled=true;try{const params=new URLSearchParams({quiz_id:String(quizId),csrf_token:csrf});Object.entries(payload).forEach(([key,value])=>params.set(key,String(value)));const response=await fetch("/api/mvp/quiz_answer.php",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:params});const result=await response.json();if(!result.success)throw new Error(result.error||"Submission rejected.");const game=document.getElementById("game");game.replaceChildren(node("span","Submission Locked","eyebrow"),node("h2",result.data.assessment_status==="PENDING"?"AI Evaluating":"Answer Submitted ✓"),node("p","Waiting for Other Players or server deadline…","muted"));lastQuestion=null}catch(error){const status=document.getElementById("live-status");if(status)status.textContent=error.message;button.disabled=false}finally{busy=false}}
 async function action(value){await fetch("/api/mvp/teacher_quiz_action.php",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({quiz_id:String(quizId),action:value,csrf_token:csrf})});poll()}
 async function poll(){try{const url=role==="teacher"?"/api/mvp/teacher_quiz_status.php?id=":"/api/mvp/student_quiz_status.php?id=";const response=await fetch(url+quizId);const result=await response.json();if(result.success)(role==="teacher"?renderTeacher:renderStudent)(result.data);else{const status=document.getElementById("live-status");if(status)status.textContent=result.error||"Status tidak tersedia."}}catch{}setTimeout(poll,pollInterval)}

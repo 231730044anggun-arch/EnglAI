@@ -5,8 +5,47 @@ window.WritingMusic={start:startMusic,stop:stopMusic,WRITING_MUSIC_MASTER_GAIN};
 async function api(action,values={}){const f=new FormData();f.append("csrf_token",csrf);f.append("session_id",String(sid));f.append("task_id",String(state.task.id));f.append("action",action);Object.entries(values).forEach(([k,v])=>f.append(k,v));const r=await fetch("/student/writing.php",{method:"POST",body:f,credentials:"same-origin"}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||"Submission gagal.");return d}
 function shell(){const t=state.task,w=n("div","","writing-task"),h=n("header","","writing-header"),meta=n("div","","task-meta"),timer=n("div","30","writing-timer"),bar=n("div","","writing-progress progress-track"),fill=n("div","","progress-fill");meta.append(n("span",t.type.replaceAll("_"," "),"badge available"),n("span",`Task ${state.position+1} dari 10`,`task-counter`));h.append(meta,timer);fill.style.width=`${state.position*10}%`;bar.append(fill);w.append(h,bar,n("p",t.instruction,"task-instruction"));const p=n("section","","writing-prompt");if(t.context)p.append(n("p",t.context,"muted"));p.append(n("h2",t.prompt));if(t.guidance)p.append(n("p",`Kata bantuan: ${t.guidance}`,"guidance"));if(t.sentence_starter)p.append(n("p",`Awalan kalimat: ${t.sentence_starter}`,"guidance"));w.append(p);return{w,timer}}
 async function task(){const{w,timer}=shell(),area=document.createElement("textarea"),actions=n("div","","writing-actions"),send=n("button","Kirim Jawaban","button gold"),count=n("span","0 kata","muted"),status=n("p","Tulis jawabanmu dalam bahasa Inggris.","writing-status");area.className="writing-editor";area.maxLength=state.task.max_chars;area.value=localStorage.getItem(draftKey())||"";area.setAttribute("aria-label","Jawaban Writing");const words=()=>count.textContent=`${area.value.trim()?area.value.trim().split(/\s+/).length:0} kata`;words();area.oninput=()=>{window.WritingMusic?.start();words();clearTimeout(draftTimer);draftTimer=setTimeout(()=>localStorage.setItem(draftKey(),area.value),700)};area.onfocus=()=>window.WritingMusic?.start();send.onclick=()=>submit(area,send,status,false);actions.append(send,count);w.append(area,actions,status);host.replaceChildren(w);area.focus();try{const d=await api("ready");state=d.state;deadline=Number(state.task_deadline_epoch_ms);countdown(timer,area,send,status)}catch(e){status.textContent=e.message}}
+function showTimeoutPopup(onConfirm){
+  const overlay=document.createElement("div");
+  overlay.className="timeout-overlay";
+  overlay.style.cssText="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,10,14,0.92);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;backdrop-filter:blur(12px);";
+  const card=document.createElement("div");
+  card.style.cssText="background:linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05));border:1px solid rgba(239,68,68,0.3);border-radius:24px;padding:40px;text-align:center;box-shadow:0 0 40px rgba(239,68,68,0.25);max-width:400px;width:90%;";
+  const icon=document.createElement("div");
+  icon.textContent="⏱️";
+  icon.style.cssText="font-size:4.5rem;margin-bottom:20px;";
+  const title=n("h2", "Time's Up!");
+  title.style.cssText="color:#ef4444;font-size:2rem;margin:0 0 10px 0;";
+  const desc=n("p", "");
+  desc.style.cssText="color:#cbd5e1;margin:0;font-size:1.05rem;";
+  
+  card.append(icon,title,desc);
+  overlay.append(card);
+  document.body.appendChild(overlay);
+  
+  let secondsLeft=5;
+  desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
+  
+  let finished=false;
+  const proceed=()=>{
+    if(finished)return;
+    finished=true;
+    clearInterval(countdownInterval);
+    overlay.remove();
+    if(onConfirm)onConfirm();
+  };
+  
+  const countdownInterval=setInterval(()=>{
+    secondsLeft--;
+    if(secondsLeft<=0){
+      proceed();
+    }else{
+      desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
+    }
+  },1000);
+}
 function countdown(timer,area,send,status){clearInterval(tick);const update=()=>{const raw=Math.ceil((deadline-Date.now())/1000),left=Number.isFinite(raw)?Math.max(0,Math.min(30,raw)):0;timer.replaceChildren(document.createTextNode(String(left)));timer.classList.toggle("warning",left<=5);if(left===0){clearInterval(tick);submit(area,send,status,true)}};update();tick=setInterval(update,250)}
-async function submit(area,button,status,timed){if(submitting)return;submitting=true;const savedKey=draftKey();clearInterval(tick);area.readOnly=true;button.disabled=true;status.textContent=timed?(area.value.trim()?"Waktu habis. Jawabanmu telah disimpan.":"Waktu habis. Tidak ada jawaban yang dikirim."):"Menyimpan jawaban…";try{const d=await api("submit",{answer:area.value.trim(),timed_out:timed?"1":"0",idempotency_key:crypto.randomUUID().replaceAll("-","").padEnd(64,"0")});localStorage.removeItem(savedKey);state=d.state;setTimeout(render,700)}catch(e){submitting=false;button.disabled=false;area.readOnly=false;status.textContent=e.message}}
+async function submit(area,button,status,timed){if(submitting)return;submitting=true;const savedKey=draftKey();clearInterval(tick);area.readOnly=true;button.disabled=true;status.textContent=timed?(area.value.trim()?"Waktu habis. Jawabanmu telah disimpan.":"Waktu habis. Tidak ada jawaban yang dikirim."):"Menyimpan jawaban…";try{const d=await api("submit",{answer:area.value.trim(),timed_out:timed?"1":"0",idempotency_key:crypto.randomUUID().replaceAll("-","").padEnd(64,"0")});localStorage.removeItem(savedKey);state=d.state;if(timed){showTimeoutPopup(()=>{render()})}else{setTimeout(render,700)}}catch(e){submitting=false;button.disabled=false;area.readOnly=false;status.textContent=e.message}}
 function reviewCard(s, i, t){
  const a=s.assessment_json?JSON.parse(s.assessment_json):null,c=n("article","","writing-review"),top=n("header","","review-head"),body=n("div","","review-body");
  const status=s.submission_status==="no_response"?"Tidak Menjawab":s.submission_status==="timed_out"?"Waktu Habis":s.assessment_status==="needs_review"?"Perlu Ditinjau":"Selesai";

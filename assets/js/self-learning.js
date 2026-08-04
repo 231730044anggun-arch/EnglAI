@@ -22,7 +22,8 @@ function showTimeoutPopup(onConfirm){
   title.textContent="Time's Up!";
   title.style.cssText="color:#ef4444;font-size:2rem;margin:0 0 10px 0;";
   var desc=document.createElement("p");
-  desc.style.cssText="color:#cbd5e1;margin:0;";
+  desc.style.cssText="color:#cbd5e1;margin:0;font-size:1.05rem;";
+  
   card.append(icon,title,desc);
   overlay.append(card);
   document.body.appendChild(overlay);
@@ -30,21 +31,28 @@ function showTimeoutPopup(onConfirm){
   var secondsLeft=5;
   desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
   
+  var finished=false;
+  var proceed=function(){
+    if(finished)return;
+    finished=true;
+    clearInterval(countdownInterval);
+    overlay.remove();
+    if(onConfirm)onConfirm();
+  };
+  
   var countdownInterval=setInterval(function(){
     secondsLeft--;
     if(secondsLeft<=0){
-      clearInterval(countdownInterval);
-      overlay.remove();
-      if(onConfirm)onConfirm();
+      proceed();
     }else{
       desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
     }
   },1000);
 }
-function startTimer(form,timer){stopTimer();var left=20,label=timer.querySelector("span"),begin=new FormData();begin.set("reading_ajax","begin");begin.set("session_id",form.elements.session_id.value);begin.set("question_id",form.elements.question_id.value);begin.set("csrf_token",form.elements.csrf_token.value);api(begin).catch(function(){});label.textContent="20";questionTimer=setInterval(function(){left--;label.textContent=String(Math.max(0,left));timer.classList.toggle("warning",left<=10);timer.classList.toggle("danger",left<=5);if(left===5)sfx("timeout");if(left<=0){stopTimer();showTimeoutPopup(function(){submit(form,null,true);});}},1000);}
+function startTimer(form,timer){stopTimer();var left=20,label=timer.querySelector("span"),begin=new FormData();begin.set("reading_ajax","begin");begin.set("session_id",form.elements.session_id.value);begin.set("question_id",form.elements.question_id.value);begin.set("csrf_token",form.elements.csrf_token.value);api(begin).catch(function(){});label.textContent="20";questionTimer=setInterval(function(){left--;label.textContent=String(Math.max(0,left));timer.classList.toggle("warning",left<=10);timer.classList.toggle("danger",left<=5);if(left===5)sfx("timeout");if(left<=0){stopTimer();submit(form,null,true);}},1000);}
 function update(data){var score=document.querySelector("[data-score]"),counter=document.querySelector("[data-question-counter]"),bar=document.querySelector("[data-game-progress]");if(score)score.textContent=String(data.score);if(counter)counter.textContent=String(data.completed?20:Math.min(20,data.current_index+1));if(bar)bar.style.width=Math.round(data.current_index/20*100)+"%";}
 function feedback(form,data){form.querySelectorAll(".choice").forEach(function(button){if(button.value===data.correct_option_id)button.classList.add("is-correct");if(button.value===data.selected_option_id&&!data.correct)button.classList.add("is-wrong");});var box=document.querySelector("[data-inline-feedback]");if(box){box.replaceChildren();box.hidden=false;box.className="reading-feedback "+(data.correct?"correct":"incorrect");box.append(node("h3","",data.correct?"Correct!":data.result==="timed_out"?"Time’s up":"Not quite"),node("p","",data.explanation),node("small","","Correct answer: "+data.correct_option_text));}sfx(data.correct?"correct":data.result==="timed_out"?"timeout":"wrong");}
-function submit(form,optionId,timedOut){if(submitting)return;submitting=true;stopTimer();form.querySelectorAll("button").forEach(function(b){b.disabled=true;});var body=new FormData(form);body.set("reading_ajax","submit");body.set("timed_out",timedOut?"1":"0");if(optionId)body.set("option_id",optionId);else body.delete("option_id");retryAction=function(){submitting=false;submit(form,optionId,timedOut);};api(body).then(function(data){retryAction=null;feedback(form,data);update(data);setTimeout(function(){submitting=false;if(data.completed){fadeMusic();location.assign("/student/self_learning.php?id="+body.get("session_id"));}else render(data.next_state);},1450);}).catch(function(error){submitting=false;var box=document.querySelector("[data-inline-feedback]");if(box){box.hidden=false;box.className="reading-feedback error";box.textContent=error.message;}form.querySelectorAll("button").forEach(function(b){b.disabled=false;});});}
+function submit(form,optionId,timedOut){if(submitting)return;submitting=true;stopTimer();form.querySelectorAll("button").forEach(function(b){b.disabled=true;});var body=new FormData(form);body.set("reading_ajax","submit");body.set("timed_out",timedOut?"1":"0");if(optionId)body.set("option_id",optionId);else body.delete("option_id");retryAction=function(){submitting=false;submit(form,optionId,timedOut);};api(body).then(function(data){retryAction=null;feedback(form,data);update(data);if(timedOut){showTimeoutPopup(function(){submitting=false;if(data.completed){fadeMusic();location.assign("/student/self_learning.php?id="+body.get("session_id"));}else render(data.next_state);});}else{setTimeout(function(){submitting=false;if(data.completed){fadeMusic();location.assign("/student/self_learning.php?id="+body.get("session_id"));}else render(data.next_state);},1450);}}).catch(function(error){submitting=false;var box=document.querySelector("[data-inline-feedback]");if(box){box.hidden=false;box.className="reading-feedback error";box.textContent=error.message;}form.querySelectorAll("button").forEach(function(b){b.disabled=false;});});}
 function bind(){var form=document.querySelector("[data-reading-answer]"),timer=document.querySelector("[data-reading-timer]");if(!form||!timer)return;form.addEventListener("submit",function(event){event.preventDefault();startMusic();if(event.submitter)submit(form,event.submitter.value,false);});startTimer(form,timer);}
 function render(state){var stage=document.querySelector("[data-reading-stage]"),q=state.question;if(!stage||!q)return;stage.replaceChildren();var top=node("div","game-top"),progress=node("div","game-progress"),fill=node("span");fill.dataset.gameProgress="";fill.style.width=Math.round(state.current_index/20*100)+"%";progress.append(fill);var timer=node("div","timer-ring"),timerLabel=node("span","","20");timer.dataset.readingTimer="";timer.append(timerLabel);top.append(progress,timer);var card=node("section","card game-card");card.dataset.questionCard="";var context=String(q.short_context||q.context||"").trim(),type=String(q.type||q.question_type||"");var meta=node("div","reading-meta"),typeLabel=node("span","eyebrow",type.replaceAll("_"," ")),instructionLabel=node("p","reading-instruction",instruction(type,context!==""));typeLabel.dataset.questionType="";instructionLabel.dataset.readingInstruction="";meta.append(typeLabel,instructionLabel);card.append(meta);if(context)card.append(node("div","short-context",context));var question=node("h1","",String(q.question||""));question.dataset.questionText="";card.append(question);var form=node("form");form.dataset.readingAnswer="";[["csrf_token",window.readingCsrf],["session_id",window.readingSession],["question_id",q.id]].forEach(function(pair){var input=document.createElement("input");input.type="hidden";input.name=pair[0];input.value=pair[1];form.append(input);});var choices=node("div","choices");(q.options||[]).forEach(function(option){var button=node("button","choice",String(option.text||""));button.type="submit";button.name="option_id";button.value=String(option.id||"");choices.append(button);});form.append(choices);var result=node("div","reading-feedback");result.dataset.inlineFeedback="";result.setAttribute("aria-live","polite");result.hidden=true;card.append(form,result);stage.append(top,card);bind();}
 document.addEventListener("DOMContentLoaded",function(){var form=document.querySelector("[data-reading-answer]");if(form){window.readingCsrf=form.elements.csrf_token.value;window.readingSession=form.elements.session_id.value;bind();document.addEventListener("pointerdown",startMusic,{once:true});startMusic();}if(document.body.dataset.sessionComplete==="1"){fadeMusic();var actions=document.querySelector(".result-card .row");if(actions){var choose=node("a","button secondary","Choose Another Level");choose.href="/student/self_learning.php";actions.append(choose);}window.EnglAIVisuals?.confetti();}});})();

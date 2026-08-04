@@ -22,11 +22,11 @@ function showTimeoutPopup(onConfirm){
   const icon=document.createElement("div");
   icon.textContent="⏱️";
   icon.style.cssText="font-size:4.5rem;margin-bottom:20px;";
-  const title=document.createElement("h2");
-  title.textContent="Time's Up!";
+  const title=node("h2", "Time's Up!");
   title.style.cssText="color:#ef4444;font-size:2rem;margin:0 0 10px 0;";
-  const desc=document.createElement("p");
-  desc.style.cssText="color:#cbd5e1;margin:0;";
+  const desc=node("p", "");
+  desc.style.cssText="color:#cbd5e1;margin:0;font-size:1.05rem;";
+  
   card.append(icon,title,desc);
   overlay.append(card);
   document.body.appendChild(overlay);
@@ -34,18 +34,25 @@ function showTimeoutPopup(onConfirm){
   let secondsLeft=5;
   desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
   
+  let finished=false;
+  const proceed=()=>{
+    if(finished)return;
+    finished=true;
+    clearInterval(countdownInterval);
+    overlay.remove();
+    if(onConfirm)onConfirm();
+  };
+  
   const countdownInterval=setInterval(()=>{
     secondsLeft--;
     if(secondsLeft<=0){
-      clearInterval(countdownInterval);
-      overlay.remove();
-      if(onConfirm)onConfirm();
+      proceed();
     }else{
       desc.textContent="Mengalihkan ke soal berikutnya dalam "+secondsLeft+" detik...";
     }
   },1000);
 }
-function countdown(timer,record,status){activeTimerElement=timer;clearInterval(tick);let handled=false;const update=async()=>{const raw=Math.ceil((deadline-Date.now())/1000),left=Number.isFinite(raw)?Math.max(0,Math.min(25,raw)):0;if(activeTimerElement){activeTimerElement.replaceChildren(document.createTextNode(String(left)));activeTimerElement.classList.toggle("warning",left<=5);}if(left||handled)return;handled=true;clearInterval(tick);if(recording){stopRecording();return}record.disabled=true;status.textContent="Waktu habis. Tidak ada rekaman yang dikirim.";showTimeoutPopup(async()=>{try{const d=await api("no_response");state=d.state;render();}catch(e){status.textContent=e.message;}});};update();tick=setInterval(update,250)}
+function countdown(timer,record,status){activeTimerElement=timer;clearInterval(tick);let handled=false;const update=async()=>{const raw=Math.ceil((deadline-Date.now())/1000),left=Number.isFinite(raw)?Math.max(0,Math.min(25,raw)):0;if(activeTimerElement){activeTimerElement.replaceChildren(document.createTextNode(String(left)));activeTimerElement.classList.toggle("warning",left<=5);}if(left||handled)return;handled=true;clearInterval(tick);if(recording){stopRecording();return}record.disabled=true;status.textContent="Waktu habis. Tidak ada rekaman yang dikirim.";try{const d=await api("no_response");state=d.state;showTimeoutPopup(()=>{render();});}catch(e){status.textContent=e.message;}};update();tick=setInterval(update,250)}
 async function startRecording(record,stop,status,liveBox){if(recording||state.attempt_used||Date.now()>=deadline)return;record.disabled=true;try{await beep();stream=await navigator.mediaDevices.getUserMedia({audio:true});const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)throw new Error("Browser belum mendukung transkripsi suara.");if(liveBox){liveBox.style.display="block";liveBox.replaceChildren();const header=node("div");header.style.display="flex";header.style.alignItems="center";header.style.gap="8px";header.style.marginBottom="8px";const dot=node("span","","pulse-dot");dot.style.display="inline-block";dot.style.width="8px";dot.style.height="8px";dot.style.backgroundColor="#ef4444";dot.style.borderRadius="50%";dot.style.animation="pulse 1.5s infinite";const label=node("small","Mendeteksi ucapan Anda...","muted");header.append(dot,label);const txt=node("p","Ucapkan respons Anda...","live-transcript-text");txt.style.fontSize="1.1rem";txt.style.color="#fff";txt.style.margin="0";txt.style.lineHeight="1.5";liveBox.append(header,txt)}let finalText="",interim="",confidence=[],chunks=[],intentional=false;recognition=new R();recognition.lang="en-US";recognition.interimResults=true;recognition.continuous=true;recognition.onresult=e=>{interim="";for(let i=e.resultIndex;i<e.results.length;i++){const a=e.results[i][0];if(e.results[i].isFinal){finalText+=(finalText?" ":"")+a.transcript.trim();if(a.confidence>0)confidence.push(a.confidence)}else interim+=a.transcript}const liveText=(finalText+(interim?" "+interim:"")).trim();const liveDisplay=liveBox?.querySelector(".live-transcript-text");if(liveDisplay)liveDisplay.textContent=liveText||"Mendengar... Silakan berbicara.";};recognition.onerror=err=>{console.warn("Speech recognition error:",err.error);const liveDisplay=liveBox?.querySelector(".live-transcript-text");if(liveDisplay){if(err.error==="not-allowed"){liveDisplay.textContent="Error: Izin mikrofon diblokir browser. Harap aktifkan izin mikrofon Anda.";}else if(err.error==="network"){liveDisplay.textContent="Error: Layanan Google Speech API membutuhkan internet. Periksa koneksi Anda.";}else if(err.error==="no-speech"){liveDisplay.textContent="Mendengar... (Tidak terdeteksi suara, silakan bicara lebih keras/dekat ke mic).";}else{liveDisplay.textContent="Error mikrofon: "+err.error+". Silakan coba berbicara lagi.";}}};recognition.onend=()=>{if(recording&&!intentional){setTimeout(()=>{if(recording&&!intentional){try{recognition.start()}catch(_){}}},300)}};recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm"});recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};recorder.onstop=async()=>{recording=false;intentional=true;try{recognition.stop()}catch(_){}tracksOff();stop.disabled=true;await new Promise(r=>setTimeout(r,600));const transcript=(finalText||interim).trim().replace(/\s+/g," ");pending={blob:new Blob(chunks,{type:recorder.mimeType}),duration:Math.max(250,Math.min(25000,Date.now()-startedAt)),transcript,confidence:confidence.length?confidence.reduce((a,b)=>a+b,0)/confidence.length:0,key:crypto.randomUUID().replaceAll("-","").padEnd(64,"0")};recorder=recognition=null;preview(transcript?pending.confidence>=.35?"Transkrip berhasil dibuat.":"Transkrip berhasil dibuat, tetapi mungkin perlu diperiksa kembali.":"Transkrip belum berhasil dibuat. Rekaman akan ditandai untuk diperiksa oleh Teacher.")};recorder.start(250);recognition.start();recording=true;window.startedAt=Date.now();stop.disabled=false;status.textContent="Sedang merekam... Ucapkan kalimat di atas dengan jelas dekat ke mic.";state.attempt_used=true;api("recording_start").catch(e=>console.warn("API recording_start failed:",e));}catch(e){recording=false;tracksOff();record.disabled=Date.now()>=deadline;status.textContent=e.message||"Mikrofon tidak dapat digunakan."}}
 let startedAt=0;Object.defineProperty(window,"startedAt",{configurable:true,get:()=>startedAt,set:value=>{startedAt=Number(value)||0}});function stopRecording(){if(recorder?.state==="recording")recorder.stop()}
 function preview(message){const{w}=shell(),card=node("section","","transcript-preview"),save=node("button","Simpan & Lanjut","button gold"),status=node("p",message,"record-status");card.append(node("h2","Hasil transkrip"),node("p",pending?.transcript||"Transkrip tidak terdeteksi. Silakan coba berbicara lebih dekat ke mikrofon.","transcript-copy"),node("p","Transkrip ini digunakan untuk memastikan ucapan berhasil terdeteksi. Koreksi pembelajaran ditampilkan setelah semua task selesai.","muted"),status,save);save.onclick=async()=>{if(uploading)return;uploading=true;save.disabled=true;status.textContent="Menyimpan rekaman…";try{const d=await api("upload",{duration_ms:String(pending.duration),idempotency_key:pending.key,raw_transcript:pending.transcript,transcript_confidence:String(pending.confidence),audio:pending.blob});state=d.state;pending=null;uploading=false;render()}catch(e){uploading=false;save.disabled=false;status.textContent=e.message+" Klik kembali untuk mengirim blob yang sama."}};w.append(card);host.replaceChildren(w)}
