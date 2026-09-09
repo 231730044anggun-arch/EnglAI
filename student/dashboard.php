@@ -216,7 +216,7 @@ $history = array_slice($history, 0, 10);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Student Classroom · EnglAI</title>
-    <link rel="stylesheet" href="/assets/css/mvp.css">
+    <link rel="stylesheet" href="/assets/css/mvp.css?v=<?= time() ?>">
     <style>
         .tab-panel {
             display: none;
@@ -496,7 +496,7 @@ $history = array_slice($history, 0, 10);
         <div id="tab-overview" class="tab-panel active">
 
 
-            <section style="margin-top: 22px;">
+            <section style="margin-top: 28px; margin-bottom: 36px;">
                 <article class="card">
                     <h2>Skill Proficiency</h2>
                     <p class="muted">Perbandingan nilai rata-rata Anda untuk setiap skill bahasa Inggris:</p>
@@ -522,7 +522,7 @@ $history = array_slice($history, 0, 10);
                 </article>
             </section>
 
-            <section class="card" style="margin-top: 22px;">
+            <section class="card" style="margin-top: 28px; margin-bottom: 36px;">
                 <h2>History Log & Progress</h2>
                 <p class="muted">Daftar riwayat aktivitas dan latihan mandiri yang telah Anda selesaikan di kelas ini:</p>
                 <?php if (empty($history)): ?>
@@ -583,7 +583,7 @@ $history = array_slice($history, 0, 10);
         <div id="tab-learning" class="tab-panel">
             
             <?php if ($hasRecommended): ?>
-                <div class="card recommend" style="margin-bottom: 22px; background: linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(236,72,153,0.05) 100%); border: 1px solid rgba(167,139,250,0.3);">
+                <div class="card recommend" style="margin-bottom: 34px; background: linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(236,72,153,0.05) 100%); border: 1px solid rgba(167,139,250,0.3);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                         <div>
                             <span class="badge available" style="margin-bottom: 8px;">Recommended Activity</span>
@@ -595,7 +595,7 @@ $history = array_slice($history, 0, 10);
                     </div>
                 </div>
             <?php endif; ?>
-            <section class="grid four">
+            <section class="grid four" style="margin-bottom: 36px;">
                 <?php foreach ([['📖', 'reading'], ['🎧', 'listening'], ['🎤', 'speaking'], ['✍️', 'writing']] as $skillData): 
                     $skillName = $skillData[1];
                     $availableLevels = $phase2[$skillName] ?? [];
@@ -628,7 +628,7 @@ $history = array_slice($history, 0, 10);
 
         <!-- TAB: LIVE CLASSROOM QUIZ -->
         <div id="tab-quiz" class="tab-panel">
-            <section class="grid two" style="margin-top: 0;">
+            <section class="grid two" style="margin-top: 0; margin-bottom: 36px;">
                 <article class="card">
                     <span class="eyebrow">Live Quiz Lobby</span>
                     <h2>Status Sesi</h2>
@@ -672,7 +672,7 @@ $history = array_slice($history, 0, 10);
 
         <!-- TAB: LEADERBOARD -->
         <div id="tab-leaderboard" class="tab-panel">
-            <section class="card" style="margin-top: 0;">
+            <section class="card" style="margin-top: 0; margin-bottom: 36px;">
                 <span class="eyebrow">Leaderboard Kelas</span>
                 <h2>Top Students</h2>
                 <p class="muted">Peringkat akumulatif keaktifan belajar siswa di kelas ini.</p>
