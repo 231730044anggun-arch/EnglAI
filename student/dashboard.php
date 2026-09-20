@@ -179,7 +179,7 @@ if ($candidateRem !== null) {
 $skillDescriptions = [
     'reading' => 'Latih vocabulary, comprehension, dan inference melalui materi membaca dari lesson plan Classroom.',
     'listening' => 'Latih pemahaman pendengaran Anda dengan audio simulasi AI dan transkrip teks interaktif.',
-    'speaking' => 'Latih percakapan bahasa Inggris Anda dengan Speech-to-Text dan AI Speaking Feedback instan.',
+    'speaking' => 'Latih pelafalan dan ritme bicara Anda dengan metode Shadowing, audio model native, dan AI Feedback instan.',
     'writing' => 'Latih penulisan esai bahasa Inggris terstruktur sesuai dengan prompt topik dari Guru.'
 ];
 

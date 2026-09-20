@@ -132,8 +132,14 @@ final class LearningContentGenerator
         
         $sentences = preg_split('/(?<=[.?!])\s+/u', $clean) ?: [];
         $sentences = array_map('trim', $sentences);
-        $sentences = array_filter($sentences, function($s) use ($adminKeywords) {
+        $hasIndo = static fn(string $s): bool => (bool)preg_match('/\b(adalah|yang|dan|di|dari|pada|untuk|dengan|sebagai|serta|atau|dalam|ini|itu|ke|oleh|karena|tidak|bisa|dapat|membantu|mempelajari|pembelajaran|menganalisis|membandingkan|penggunaan|kemampuan|kebanggaan|membuat|menggunakan|pengetahuan|menumbuhkan|persamaan|perbedaan|satwa|endemik|tujuan|peserta|didik|siswa|guru|kegiatan|pendahuluan|penutup|materi|langkah|asesmen)\b/iu', $s);
+        $isEnglish = static function(string $s) use ($hasIndo): bool {
+            if ($hasIndo($s)) return false;
+            return (bool)preg_match('/\b(the|is|are|was|were|in|on|at|and|or|of|to|a|an|it|they|we|you|he|she|have|has|had|with|by|from|this|that|their|there)\b/i', $s);
+        };
+        $sentences = array_filter($sentences, function($s) use ($adminKeywords, $isEnglish) {
             if (mb_strlen($s) < 40 || mb_strlen($s) > 180) return false;
+            if (!$isEnglish($s)) return false;
             $lower = mb_strtolower($s);
             foreach ($adminKeywords as $word) {
                 if (mb_strpos($lower, $word) !== false) return false;

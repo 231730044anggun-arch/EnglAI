@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config/koneksi.php';
+if (isset($_SERVER['REQUEST_URI']) && preg_match('#^/englai(?:/|$)#i', $_SERVER['REQUEST_URI'])) {
+    $targetPath = preg_replace('#^/englai#i', '', $_SERVER['REQUEST_URI']) ?: '/';
+    header('Location: http://localhost:8000' . $targetPath);
+    exit;
+}
 apply_security_headers(true);
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 $error = trim((string)($_GET['error'] ?? ''));
