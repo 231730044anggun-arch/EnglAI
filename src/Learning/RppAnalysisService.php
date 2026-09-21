@@ -21,7 +21,7 @@ final class RppAnalysisService
     private function fromAi(string $text): array
     {
         $key=(string)env_value('GEMINI_API_KEY','');if($key==='')throw new \RuntimeException('Provider unavailable.');
-        return (new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-3.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate("Analyze this English lesson material or text. Return JSON only with topic string, learning_objectives array, competencies array, vocabulary array, grammar array, skill_focus array using reading/listening/speaking/writing, material_complexity string, recommended_level basic|intermediate|advanced, recommendation_reason string, source_excerpts array. Material:\n".mb_substr($text,0,24000));
+        return (new GeminiProvider($key,(string)env_value('GEMINI_MODEL','gemini-3.5-flash'),(int)env_value('GEMINI_TIMEOUT_SECONDS','45')))->generate("Analyze this English lesson material or text. Return JSON only with topic string (in English), learning_objectives array (in English), competencies array (in English), vocabulary array (English words only), grammar array (in English), skill_focus array using reading/listening/speaking/writing, material_complexity string (in English), recommended_level basic|intermediate|advanced, recommendation_reason string (in English), source_excerpts array. CRITICAL LANGUAGE RULE: All fields in the JSON response MUST BE in proper English. Even if the lesson text is written in Indonesian, you must formulate and translate all topics, objectives, competencies, and explanations strictly in English. Material:\n".mb_substr($text,0,24000));
     }
     /** @return array<string,mixed> */
     private function fallback(string $text,string $name): array

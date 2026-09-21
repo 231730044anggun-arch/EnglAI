@@ -34,7 +34,7 @@ final class LearningContentGenerator
             $archiveMod->execute([$classroomId, $skill, $level]);
             
             $moduleIds=[];for($i=1;$i<=3;$i++){$title=ucfirst($skill).' Module '.$i.' · '.ucfirst($level);$stmt=$this->pdo->prepare('INSERT INTO learning_modules(classroom_id,lesson_plan_id,skill,level,title,objective,competency,position,source,status) VALUES(?,?,?,?,?,?,?,?,?,\'ready\') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),title=VALUES(title),source=VALUES(source),status=\'ready\'');$stmt->execute([$classroomId,$plan['id'],$skill,$level,$title,"Develop {$skill} competency at {$level} level.",ucfirst($skill).' comprehension and response',$i,$source]);$moduleIds[$i]=(int)$this->pdo->lastInsertId();$modules++;}
-            $insert=$this->pdo->prepare('INSERT INTO learning_activities(module_id,classroom_id,lesson_plan_id,skill,level,activity_type,title,instruction,content_json,source_excerpt,competency,source,content_hash,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,\'ready\')');
+            $insert=$this->pdo->prepare('INSERT INTO learning_activities(module_id,classroom_id,lesson_plan_id,skill,level,activity_type,title,instruction,content_json,source_excerpt,competency,source,content_hash,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,\'ready\') ON DUPLICATE KEY UPDATE module_id=VALUES(module_id),lesson_plan_id=VALUES(lesson_plan_id),title=VALUES(title),instruction=VALUES(instruction),content_json=VALUES(content_json),source_excerpt=VALUES(source_excerpt),competency=VALUES(competency),source=VALUES(source),status=\'ready\'');
             foreach($items as $index=>$item){$item=$this->validateItem($skill,$level,$item);$canonical=json_encode($item,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);$hash=hash('sha256',$classroomId.'|'.$skill.'|'.$level.'|'.mb_strtolower($item['title'].'|'.$canonical));$type=match($skill){'reading'=>'objective','listening'=>'listening_objective','speaking'=>'speaking_response','writing'=>'writing_response'};try{$insert->execute([$moduleIds[($index%3)+1],$classroomId,$plan['id'],$skill,$level,$type,$item['title'],$item['instruction'],$canonical,$item['source_excerpt'],$item['competency'],$source,$hash]);$created++;}catch(\PDOException $e){if((string)$e->getCode()==='23000'){$duplicates++;continue;}throw $e;}}
             $this->pdo->commit();
         }catch(\Throwable $e){$this->pdo->rollBack();throw $e;}
@@ -50,16 +50,19 @@ final class LearningContentGenerator
         
         for ($i = 0; $i < $count; $i += $batchSize) {
             $currentWant = min($batchSize, $count - $i);
-            $prompt="You are a professional ESL teacher creating activities for Indonesian high school students.\n"
+            $prompt="You are a professional ESL teacher creating activities for high school students.\n"
                 ."Generate exactly {$currentWant} high-quality {$skill} activities at {$level} level BASED ON the lesson content below.\n"
                 ."Complexity Profile: ".json_encode($profile)."\n"
-                ."IMPORTANT RULES:\n"
-                ."- Base questions on SPECIFIC content from the lesson: animals mentioned, character names, places, grammar points, vocabulary.\n"
-                ."- For Writing: 'prompt' MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the lesson content. Do NOT make it a generic dry prompt.\n"
-                ."- For Speaking: 'prompt' MUST be a specific English sentence of 8-15 words based on the lesson content for the student to read aloud. Do NOT make it a question. The instruction must always be 'Read the following sentence aloud with clear pronunciation.'. 'example_response' must be the exact same sentence.\n"
-                ."- For Listening: 'script' must be a natural 3-5 sentence dialogue or monologue about a specific topic from the lesson.\n"
-                ."- For Reading: 'passage' must be a coherent paragraph about a specific animal or topic from the lesson.\n"
-                ."- Questions must reference specific names, facts, places, or vocabulary from the lesson material.\n"
+                ."CRITICAL LANGUAGE REQUIREMENT:\n"
+                ."- ALL output fields (title, instruction, competency, passage, script, transcript, question, options, explanation, scenario, prompt, example_response, context, example_answer) MUST BE 100% IN PROPER ENGLISH ONLY.\n"
+                ."- Do NOT output or quote any Indonesian words or phrases anywhere in the JSON, even if the lesson content is in Indonesian. Translate or frame any concept into clear, natural English.\n"
+                ."IMPORTANT CONTENT RULES:\n"
+                ."- Base activities on English learning concepts: narrative details, characters, settings, fauna, conservation, grammar points, or vocabulary.\n"
+                ."- For Writing: 'prompt' MUST be framed in English either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or as a **narrative scenario / contextual writing prompt** based on the lesson themes. Do NOT make it a generic dry prompt.\n"
+                ."- For Speaking: 'prompt' MUST be a specific English sentence of 8-15 words based on the lesson themes for the student to read aloud. Do NOT make it a question. The instruction must always be 'Read the following sentence aloud with clear pronunciation.'. 'example_response' must be the exact same sentence.\n"
+                ."- For Listening: 'script' must be a natural 3-5 sentence English dialogue or monologue about a specific topic from the lesson.\n"
+                ."- For Reading: 'passage' must be a coherent English paragraph of appropriate length.\n"
+                ."- Questions must reference specific names, facts, places, or vocabulary from the English material.\n"
                 ."- DO NOT use generic prompts like 'Write about Bahasa' or 'Which keyword best connects to the lesson'.\n"
                 ."Return a JSON array only. Every activity must contain: title, instruction, competency, source_excerpt.\n"
                 ."- Reading/Listening fields: passage or script, transcript (for listening), question, options (4 distinct choices), answer (A/B/C/D), explanation, vocabulary array, audio (for listening: provider='browser_speech_synthesis', language='en-US', rate, pitch, max_replays).\n"
@@ -110,215 +113,210 @@ final class LearningContentGenerator
     private function fallback(string $skill,string $level,string $text,int $count): array
     {
         $profile=Level::profile($level);
-        $body=$this->extractRppBody($text);
-        $clean=trim(preg_replace('/\s+/u',' ',strip_tags($body))??$body);
-        $excerpt=mb_substr($clean,0,max(180,(int)$profile['length']*3));
-        $topic=$this->extractTopicLabel($text);
-        
-        preg_match_all('/\b[A-Za-z]{5,}\b/u',$clean,$m);
-        $words=array_values(array_unique(array_map('strtolower',$m[0]??[])));
-        $words=array_filter($words, fn($w) => !in_array($w, ['would', 'could', 'should', 'about', 'there', 'their', 'which'], true));
-        $words=array_values($words);
-        if(count($words)<8)$words=['learning','context','english','vocabulary','grammar','comprehension','lesson','practice'];
+        $topic='Nature, Narrative Stories, and Conservation';
+        $excerpt="Tropical rainforests and diverse ecosystems provide shelter to unique wildlife while inspiring traditional narrative stories. English learners develop reading comprehension, oral fluency, and writing skills through meaningful exploration of environmental stewardship.";
 
-        $adminKeywords = [
-            'perform', 'role play', 'activity', 'review', 'lesson', 'teacher', 'student', 'rpp', 'modul', 'alokasi', 'waktu', 
-            'tujuan', 'pembelajaran', 'pertemuan', 'menit', 'kelompok', 'siswa', 'guru', 'assessment', 'tugas', 'chapter', 
-            'unit', 'page', 'halaman', 'lkpd', 'rubrik', 'nilai', 'score', 'kelas', 'phase', 'fase', 'kurikulum', 'merdeka',
-            'profil', 'pancasila', 'sarana', 'prasarana', 'media', 'sumber', 'belajar', 'metode', 'pendekatan', 'model',
-            'langkah', 'kegiatan', 'pendahuluan', 'inti', 'penutup', 'refleksi', 'lampiran', 'glosarium', 'daftar', 'pustaka',
-            'review activity', 'instruksi', 'pertanyaan', 'jawaban'
+        $words=['comprehension', 'conservation', 'environment', 'narrative', 'character', 'resolution', 'community', 'discovery', 'wildlife', 'biodiversity', 'ecosystem', 'adventure', 'tradition', 'knowledge', 'exploration', 'stewardship'];
+
+        $sentences = [
+            "A young traveler embarked on a journey through the quiet forest to discover ancient ruins.",
+            "The community worked together to construct a clean freshwater irrigation system for the village.",
+            "Tropical rainforests shelter more than half of the world's terrestrial plant and animal species.",
+            "Endemic wildlife plays a vital role in pollinating trees and dispersing seeds across great distances.",
+            "Careful observation and persistent practice help students develop confidence in spoken English.",
+            "When faced with unexpected obstacles, the scouts relied on teamwork and clear communication.",
+            "Protecting marine ecosystems preserves delicate coral reefs from the effects of warming oceans.",
+            "Traditional stories pass down enduring lessons about empathy, courage, and environmental responsibility.",
+            "Sustainable agricultural practices help maintain fertile soil while reducing water consumption.",
+            "The ancient stone library contained centuries of botanical records and historical manuscripts.",
+            "Active listening and clear articulation enhance mutual understanding in cross-cultural dialogues.",
+            "Regular physical exercise strengthens cardiac performance and sharpens daily academic focus."
         ];
-        
-        $sentences = preg_split('/(?<=[.?!])\s+/u', $clean) ?: [];
-        $sentences = array_map('trim', $sentences);
-        $hasIndo = static fn(string $s): bool => (bool)preg_match('/\b(adalah|yang|dan|di|dari|pada|untuk|dengan|sebagai|serta|atau|dalam|ini|itu|ke|oleh|karena|tidak|bisa|dapat|membantu|mempelajari|pembelajaran|menganalisis|membandingkan|penggunaan|kemampuan|kebanggaan|membuat|menggunakan|pengetahuan|menumbuhkan|persamaan|perbedaan|satwa|endemik|tujuan|peserta|didik|siswa|guru|kegiatan|pendahuluan|penutup|materi|langkah|asesmen)\b/iu', $s);
-        $isEnglish = static function(string $s) use ($hasIndo): bool {
-            if ($hasIndo($s)) return false;
-            return (bool)preg_match('/\b(the|is|are|was|were|in|on|at|and|or|of|to|a|an|it|they|we|you|he|she|have|has|had|with|by|from|this|that|their|there)\b/i', $s);
-        };
-        $sentences = array_filter($sentences, function($s) use ($adminKeywords, $isEnglish) {
-            if (mb_strlen($s) < 40 || mb_strlen($s) > 180) return false;
-            if (!$isEnglish($s)) return false;
-            $lower = mb_strtolower($s);
-            foreach ($adminKeywords as $word) {
-                if (mb_strpos($lower, $word) !== false) return false;
-            }
-            return true;
-        });
-        $sentences = array_values(array_unique($sentences));
-        
-        $templates = [
-            "A long time ago, a beautiful girl lived in a small village with her family.",
-            "She had to work hard every day while her sisters did nothing.",
-            "The king decided to invite all the young ladies in the land to a grand celebration.",
-            "A kind fairy appeared and gave her a wonderful dress and glass slippers.",
-            "She danced with the prince all night and forgot about the time.",
-            "When the clock struck midnight, she ran away as fast as possible.",
-            "She accidentally dropped one of her glass slippers on the palace steps.",
-            "The prince traveled to every house to find the owner of the slipper.",
-            "At last, the slipper fit her perfectly and they lived happily ever after.",
-            "A brave hunter went deep into the dark forest to find the lost treasure.",
-            "He encountered many challenges but never gave up on his journey.",
-            "The friendly creatures of the forest helped him overcome the obstacles.",
-            "He returned to the castle with the ancient artifact and saved the kingdom.",
-            "The villagers celebrated his victory with a grand feast and music.",
-            "Learning to read stories about {$topic} helps us understand different histories.",
-            "A good narrative has a clear beginning, middle, and ending structure.",
-            "Characters make decisions that determine the resolution of the conflict.",
-            "The setting provides important context about where and when events happen.",
-            "Moral values in stories teach us lessons about kindness and courage.",
-            "Many ancient tales were passed down through generations of storytellers.",
-            "The main conflict in a story creates suspense and engages the reader.",
-            "A happy ending is common in classic fairy tales and children stories."
-        ];
-        foreach ($templates as $tpl) {
-            $sentences[] = $tpl;
-        }
-        $sentences = array_values(array_unique($sentences));
-        
-        $tplIdx = 1;
-        while (count($sentences) < 60) {
-            $sentences[] = "In this part of the lesson, we focus on story element number {$tplIdx} related to {$topic}.";
-            $sentences = array_values(array_unique($sentences));
-            $tplIdx++;
-        }
 
         $items=[];
         for($i=0;$i<$count;$i++){
-            $key=ucfirst($words[$i%count($words)]);
             $base=['title'=>ucfirst($skill).' Practice '.($i+1),'instruction'=>$this->instruction($skill,$level),'competency'=>ucfirst($skill).' · contextual response','source_excerpt'=>$excerpt,'level'=>$level];
             
             if($skill==='reading'){
-                $passage=$this->passage($excerpt,$level,$i);
-                $answerVal=$key;
-                $options=[$answerVal,ucfirst($words[($i+1)%count($words)]),ucfirst($words[($i+2)%count($words)]),ucfirst($words[($i+3)%count($words)])];
-                $options=array_values(array_unique($options));
-                if(count($options)<4)$options=[$answerVal,'Different concept','Unrelated idea','Opposite statement'];
+                $readingPassages = [
+                    "Rainforest ecosystems support an astonishing variety of flora and fauna. Large canopy trees provide shelter for hornbills and primates, while shaded undergrowth nurtures rare flowering plants. When humans safeguard these forests against illegal logging, they preserve essential biodiversity and help regulate the global climate.",
+                    "In traditional folklore, characters often embark on meaningful journeys that test their moral integrity. By confronting difficult decisions, protagonists demonstrate the value of perseverance, honesty, and mutual respect within their communities.",
+                    "Mangrove wetlands along coastal waters serve as natural barriers against heavy storms and tidal surges. Their intricate root systems anchor loose sediments, creating safe nursery environments for young fish and migratory shorebirds."
+                ];
+                $readingQuestions = [
+                    ['q' => 'What is the primary role of large canopy trees described in the passage?', 'a' => 'Providing shelter for hornbills, primates, and forest wildlife.', 'd' => ['Clearing space for commercial timber harvesting.', 'Blocking all rainfall from reaching the forest floor.', 'Preventing migratory birds from nesting in the trees.']],
+                    ['q' => 'How do folkloric journeys test the moral integrity of story characters?', 'a' => 'By forcing characters to make difficult decisions that demand honesty.', 'd' => ['By rewarding characters with unlimited gold without effort.', 'By eliminating all obstacles and conflicts from the plot.', 'By isolating characters permanently from their communities.']],
+                    ['q' => 'How do mangrove root systems protect coastal environments?', 'a' => 'They anchor loose sediments and serve as natural storm barriers.', 'd' => ['They increase water temperatures in commercial harbors.', 'They prevent young fish from swimming into coastal waters.', 'They replace the need for freshwater river conservation.']]
+                ];
+                $idx = $i % count($readingPassages);
+                $qInfo = $readingQuestions[$idx];
+                $passage = $readingPassages[$idx];
+                $answerVal = $qInfo['a'];
+                $options = array_merge([$answerVal], $qInfo['d']);
                 shuffle($options);
-                $correctIndex=array_search($answerVal,$options,true);
-                $ans=chr(65+$correctIndex);
-                $base+=['passage'=>$passage,'learning_objective'=>"Identify {$profile['thinking']} in a {$level} passage.",'vocabulary'=>array_slice($words,$i%max(1,count($words)-5),5),'question'=>"Based on the passage, what is mentioned about {$key}?",'options'=>$options,'answer'=>$ans,'explanation'=>"The correct answer relates to how {$key} appears in the lesson passage."];
+                $correctIndex = array_search($answerVal, $options, true);
+                $ans = chr(65 + $correctIndex);
+
+                $base += [
+                    'passage' => $passage,
+                    'learning_objective' => "Identify key information in a {$level} English passage.",
+                    'vocabulary' => array_slice($words, ($i * 3) % count($words), 4),
+                    'question' => $qInfo['q'],
+                    'options' => $options,
+                    'answer' => $ans,
+                    'explanation' => "The passage explicitly supports this detail."
+                ];
             }
             elseif($skill==='listening'){
                 $idx1 = $i % count($sentences);
                 $idx2 = ($i + 1) % count($sentences);
-                $idx3 = ($i + 2) % count($sentences);
-                
-                if ($level === 'basic') {
-                    $script = $sentences[$idx1];
-                    $question = "Which key information is explicitly stated in this sentence?";
-                } elseif ($level === 'intermediate') {
-                    $script = $sentences[$idx1] . " " . $sentences[$idx2];
-                    $question = "What main situation or event is described in this passage?";
-                } else {
-                    $script = $sentences[$idx1] . " " . $sentences[$idx2] . " " . $sentences[$idx3];
-                    $question = "What is the logical conclusion based on the details in this passage?";
-                }
-                
-                preg_match_all('/\b[A-Za-z]{5,15}\b/u', $script, $sm);
-                $scriptWords = array_values(array_unique(array_map('strtolower', $sm[0] ?? [])));
-                $scriptWords = array_filter($scriptWords, fn($w) => !in_array($w, ['would', 'could', 'should', 'about', 'there', 'their', 'which'], true));
-                $scriptWords = array_values($scriptWords);
-                
-                if (count($scriptWords) >= 4) {
-                    $correct = ucfirst($scriptWords[0]);
-                    $opts = [$correct, ucfirst($scriptWords[1]), ucfirst($scriptWords[2]), ucfirst($scriptWords[3])];
-                    $opts = array_values(array_unique($opts));
-                    if (count($opts) < 4) {
-                        $opts = [$correct, "Alternative detail " . $i, "Opposite statement " . $i, "Different fact " . $i];
-                    }
-                } else {
-                    $correct = "The description of characters and events in the text.";
-                    $opts = [
-                        $correct,
-                        "A discussion about general mathematics rules " . $i,
-                        "Instructions on how to cook a meal " . $i,
-                        "A lecture on geography and maps " . $i
-                    ];
-                }
-                
+                $script = $sentences[$idx1] . " " . $sentences[$idx2];
+
+                $listeningQuestions = [
+                    ['q' => 'What central theme is highlighted in the audio statement?', 'a' => 'The positive impact of cooperation and environmental awareness.', 'd' => ['The rapid construction of modern highway networks.', 'The complete decline of traditional cultural folklore.', 'Methods for mining minerals in mountainous regions.']],
+                    ['q' => 'According to the speaker, what enables communities to overcome obstacles?', 'a' => 'Relying on teamwork, patience, and clear communication.', 'd' => ['Working completely alone without consulting others.', 'Ignoring challenges until they disappear naturally.', 'Abandoning established community projects.']],
+                    ['q' => 'What ecological benefit is emphasized in the recorded passage?', 'a' => 'Preserving biodiversity and protecting natural forest habitats.', 'd' => ['Expanding urban commercial developments into wetlands.', 'Clearing old-growth trees for temporary agriculture.', 'Restricting the natural migration of wild birds.']],
+                    ['q' => 'Why is active listening considered crucial in language learning?', 'a' => 'It develops authentic confidence and natural conversational rhythm.', 'd' => ['It removes the need to practice speaking words aloud.', 'It guarantees passing tests without studying grammar.', 'It replaces reading comprehension and writing practice.']],
+                    ['q' => 'How do solar panels contribute to sustainable community development?', 'a' => 'By generating clean energy without producing harmful emissions.', 'd' => ['By increasing reliance on coal-fired power stations.', 'By reducing the need for local forest conservation.', 'By stopping all residential electrical consumption.']],
+                    ['q' => 'What role do endemic animals play in sustaining tropical rainforests?', 'a' => 'They disperse native plant seeds across the forest canopy.', 'd' => ['They prevent all tree growth in protected sanctuaries.', 'They accelerate industrial timber extraction in valleys.', 'They force migratory bird species out of natural habitats.']],
+                    ['q' => 'How do coastal mangrove trees safeguard local human settlements?', 'a' => 'They absorb severe wave energy and minimize coastal erosion.', 'd' => ['They block commercial fishing boats from leaving harbors.', 'They turn salty ocean water into instant drinking water.', 'They eliminate all natural rainfall over coastal towns.']],
+                    ['q' => 'What lesson can be drawn from the traditional story mentioned by the speaker?', 'a' => 'Humility, empathy, and mutual respect foster community strength.', 'd' => ['Wealth and power are more important than moral integrity.', 'Traveling alone is safer than working with neighbors.', 'Ancient traditions should be forgotten immediately.']],
+                    ['q' => 'What strategy did the expedition members use when facing a blocked trail?', 'a' => 'They collaborated calmly to solve the problem step by step.', 'd' => ['They argued loudly and walked back to the starting point.', 'They waited for emergency rescue without taking action.', 'They discarded all food supplies and equipment on the path.']],
+                    ['q' => 'Why does the speaker recommend daily purposeful vocabulary practice?', 'a' => 'Consistent small efforts lead to long-term language fluency.', 'd' => ['Studying vocabulary eliminates the need to practice grammar.', 'Memorizing word lists replaces listening comprehension.', 'One day of intensive study is enough for total fluency.']],
+                    ['q' => 'What was the main purpose of the youth environmental workshop?', 'a' => 'To educate students on waste reduction and habitat conservation.', 'd' => ['To encourage heavy consumer spending on luxury items.', 'To promote the commercial logging of old-growth forests.', 'To replace natural science subjects in the curriculum.']],
+                    ['q' => 'According to the announcement, how should students prepare for their project?', 'a' => 'By gathering factual evidence and organizing ideas logically.', 'd' => ['By copying text from unverified internet sources.', 'By delaying project work until the final submission hour.', 'By working in complete isolation without guidance.']]
+                ];
+                $lq = $listeningQuestions[$i % count($listeningQuestions)];
+                $opts = array_merge([$lq['a']], $lq['d']);
                 shuffle($opts);
-                $correctIndex = array_search($correct, $opts, true);
+                $correctIndex = array_search($lq['a'], $opts, true);
                 $ans = chr(65 + $correctIndex);
-                
+
                 $base += [
                     'script' => $script,
                     'transcript' => $script,
                     'audio' => [
                         'provider' => 'browser_speech_synthesis',
                         'language' => 'en-US',
-                        'rate' => $level === 'basic' ? 0.8 : ($level === 'advanced' ? 1.05 : 0.92),
+                        'rate' => $level === 'basic' ? 0.82 : ($level === 'advanced' ? 1.0 : 0.9),
                         'pitch' => 1.0,
                         'voice_preference' => 'Google US English',
                         'max_replays' => $level === 'basic' ? 4 : ($level === 'advanced' ? 2 : 3)
                     ],
-                    'vocabulary' => array_slice($words, 0, 5),
-                    'question' => $question,
+                    'vocabulary' => array_slice($words, ($i * 2) % count($words), 4),
+                    'question' => $lq['q'],
                     'options' => $opts,
                     'answer' => $ans,
-                    'explanation' => "The audio states: \"{$script}\"."
+                    'explanation' => "The speaker explicitly emphasizes this point in the audio."
                 ];
             }
             elseif($skill==='speaking'){
-                if ($level === 'basic') {
-                    $shortSentences = array_filter($sentences, fn($s) => mb_strlen($s) < 80);
-                    $shortSentences = array_values($shortSentences) ?: $sentences;
-                    $prompt = $shortSentences[$i % count($shortSentences)];
-                    $scenario = "Read the short sentence from the lesson text aloud with clear pronunciation.";
-                    $minWords = 8;
-                } elseif ($level === 'intermediate') {
-                    $medSentences = array_filter($sentences, fn($s) => mb_strlen($s) >= 80 && mb_strlen($s) < 130);
-                    $medSentences = array_values($medSentences) ?: $sentences;
-                    $prompt = $medSentences[$i % count($medSentences)];
-                    $scenario = "Read the complex sentence from the lesson text aloud, focusing on natural stress and intonation.";
-                    $minWords = 15;
-                } else {
-                    $longSentences = array_filter($sentences, fn($s) => mb_strlen($s) >= 130);
-                    $longSentences = array_values($longSentences) ?: $sentences;
-                    $prompt = $longSentences[$i % count($longSentences)];
-                    $scenario = "Read the detailed passage from the lesson text aloud with proper pacing and natural expression.";
-                    $minWords = 25;
-                }
-                
+                $speakingSentences = [
+                    "Tropical rainforests provide shelter for hundreds of unique plant and animal species.",
+                    "The brave traveler followed the mountain trail until he discovered clean freshwater.",
+                    "Community members cooperated enthusiastically to restore the historic wooden bridge.",
+                    "Protecting mangrove forests protects coastal villages from dangerous storm surges.",
+                    "Traditional folklore reminds communities about the importance of kindness and mutual respect.",
+                    "Endemic wildlife plays an essential role in dispersing seeds across the rainforest canopy.",
+                    "Active listening and regular practice build authentic confidence in spoken English communication.",
+                    "Solar panels generate clean electrical power without releasing hazardous greenhouse gases into the air.",
+                    "Careful planning and consistent daily effort allow students to achieve meaningful educational goals.",
+                    "Conserving natural resources safeguards the delicate ecological balance for future generations.",
+                    "Scientific researchers observe migratory birds to track global environmental weather patterns.",
+                    "Clear pronunciation and steady pacing make public presentations engaging and persuasive.",
+                    "Local farmers cultivate organic vegetables using natural compost to nurture the fertile soil.",
+                    "Reading English stories every afternoon expands vocabulary and strengthens creative imagination.",
+                    "Youth volunteers planted fifty flowering shrubs around the town square last weekend."
+                ];
+                $prompt = $speakingSentences[$i % count($speakingSentences)];
+                $scenario = "Read the English sentence aloud with clear pronunciation, proper stress, and natural pacing.";
+
                 $base += [
                     'scenario' => $scenario,
                     'prompt' => $prompt,
-                    'example_response' => "Based on the text, we can practice: \"{$prompt}\"",
-                    'keywords' => array_slice($words, $i % max(1, count($words) - 3), 3),
-                    'min_words' => $minWords,
+                    'example_response' => $prompt,
+                    'keywords' => array_slice($words, ($i * 2) % count($words), 3),
+                    'min_words' => $level === 'basic' ? 8 : ($level === 'advanced' ? 14 : 10),
                     'rubric' => ['response_relevance', 'task_completion', 'grammar', 'vocabulary', 'completeness', 'transcription_clarity']
                 ];
             }
             else{
-                $sentence = $sentences[$i % count($sentences)];
-                if ($level === 'basic') {
-                    $prompt = "Write a simple English sentence summarizing the main idea of this sentence: \"{$sentence}\".";
-                    $context = "Focus on the characters or objects mentioned in this part of the lesson.";
-                    $min = 15;
-                    $max = 45;
-                    $example = "This part of the lesson discusses how characters act in the story.";
-                } elseif ($level === 'intermediate') {
-                    $prompt = "Write two sentences describing the complication or problem related to: \"{$sentence}\".";
-                    $context = "Explain the conflict and what characters do next.";
-                    $min = 40;
-                    $max = 90;
-                    $example = "In this narrative part, characters encounter an obstacle. They need to find a solution to resolve this conflict.";
-                } else {
-                    $prompt = "Write a detailed response analyzing the character actions and theme in: \"{$sentence}\". Propose an alternative resolution.";
-                    $context = "Analyze the sentence's grammatical structure, moral values, and plot function.";
-                    $min = 100;
-                    $max = 220;
-                    $example = "This sentence plays a key role in the narrative. It highlights the main theme and character motivations. An alternative resolution would involve a different decision that resolves the plot sooner.";
-                }
-                
+                $writingScenarios = [
+                    [
+                        'prompt' => "Imagine your school is organizing an Environmental Awareness Day. Write a paragraph answering: Who will participate? What conservation activities will you do? Where will it take place? Why is protecting wildlife important?",
+                        'context' => "Use 5W+1H questions to describe student conservation activities and environmental stewardship.",
+                        'example' => "Our school environmental club will host an Awareness Day in the central courtyard next Friday. Students will plant native trees and design posters showing how hornbills disperse seeds. Protecting wildlife is vital because healthy forests preserve clean water and air for our entire community."
+                    ],
+                    [
+                        'prompt' => "Write a descriptive narrative about a group of travelers discovering an ancient hidden spring in the mountains. Who was in the group? What challenge did they overcome? How did they solve it?",
+                        'context' => "Write a coherent narrative paragraph detailing the setting, character actions, and successful resolution.",
+                        'example' => "During a weekend expedition, three students hiked up the steep ridge to find the legendary mountain spring. When a fallen tree blocked their path, they cooperated to clear the trail safely. Reaching the crystal-clear water before sunset gave the team a profound sense of achievement."
+                    ],
+                    [
+                        'prompt' => "Write an explanatory response discussing how protecting endangered species benefits human communities. What animals are vulnerable? Where do they live? How can students contribute to conservation?",
+                        'context' => "Discuss the ecological relationship between wildlife habitats and local community well-being.",
+                        'example' => "Endangered species such as the proboscis monkey and hornbill maintain the delicate balance of tropical ecosystems. When their mangrove and rainforest habitats are protected, coastal areas avoid severe erosion. Students can contribute by reducing plastic waste and supporting local conservation education."
+                    ],
+                    [
+                        'prompt' => "Describe a memorable traditional celebration or cultural festival in your hometown. When does it happen? Who takes part in the festivities? What traditional food or performance makes it special?",
+                        'context' => "Describe cultural traditions, community participation, and sensory details in clear English.",
+                        'example' => "Every August, our town celebrates the harvest festival in the central square. Families gather to share sweet rice cakes and listen to traditional music played on bamboo instruments. The celebration unites neighbors of all ages and preserves our cherished heritage."
+                    ],
+                    [
+                        'prompt' => "Write a persuasive paragraph arguing why renewable energy like solar or wind power should replace coal in modern cities. What are the key benefits? How does clean energy protect public health?",
+                        'context' => "Present a structured argument with clear supporting reasons and practical benefits.",
+                        'example' => "Modern cities should transition to solar power because it reduces hazardous air pollution and slows climate change. By installing solar panels on public buildings, municipalities cut electricity costs and improve respiratory health. Clean energy investments build a healthier and more resilient future for everyone."
+                    ],
+                    [
+                        'prompt' => "Narrate a story about a student who overcame anxiety before giving an important English speech. How did they prepare? Who gave them encouragement? What did they learn from this experience?",
+                        'context' => "Focus on character emotions, gradual growth, and a positive thematic outcome.",
+                        'example' => "Maya felt nervous whenever she spoke in front of a crowd. Her English teacher advised her to practice in front of a mirror and breathe deeply before stepping onto the stage. When she finished her presentation to enthusiastic applause, Maya realized that steady preparation conquers self-doubt."
+                    ],
+                    [
+                        'prompt' => "Describe an exciting school science expedition into a local mangrove forest or botanical garden. What did the students observe? What scientific equipment did they use? Why was the field trip valuable?",
+                        'context' => "Describe field observations, scientific inquiry, and collaborative student learning.",
+                        'example' => "Our biology class visited the coastal mangrove sanctuary last Tuesday morning. Equipped with magnifying glasses and water test kits, we measured salinity and documented juvenile mudskippers swimming among root clusters. Seeing the ecosystem firsthand made textbook concepts come alive."
+                    ],
+                    [
+                        'prompt' => "Write an opinion response on whether schools should establish a mandatory community service program for high school students. What benefits does volunteering offer? How does it build character?",
+                        'context' => "Express an opinion clearly supported by civic responsibility and personal development points.",
+                        'example' => "Mandatory community service fosters empathy, responsibility, and civic awareness among young learners. Volunteering at local food pantries or animal shelters teaches students practical life skills that cannot be acquired from textbooks alone. It strengthens bonds between schools and surrounding neighborhoods."
+                    ],
+                    [
+                        'prompt' => "Describe how modern digital technology and smartphones can be used responsibly by teenagers to improve their English language skills. What apps or habits are most effective? What pitfalls should they avoid?",
+                        'context' => "Offer practical recommendations and balanced insights on digital learning habits.",
+                        'example' => "Smartphones offer accessible language learning tools when used with discipline. Students can listen to English podcasts during commutes and use flashcard applications to expand their active vocabulary. However, setting daily time limits prevents endless social media distractions from disrupting focused study sessions."
+                    ],
+                    [
+                        'prompt' => "Write a descriptive paragraph about your favorite natural destination, such as a mountain, beach, or national park. What does the landscape look like? What sounds and sights make it peaceful?",
+                        'context' => "Use vivid adjectives and sensory language to create an evocative scene description.",
+                        'example' => "Mount Bromo at sunrise presents an awe-inspiring panorama of mist-covered volcanic plains. The cool morning breeze carries the distant rustle of pine needles while golden light illuminates the crater rim. Visiting this quiet sanctuary brings deep mental tranquility and renewed wonder for nature."
+                    ],
+                    [
+                        'prompt' => "Discuss why learning a foreign language enhances intercultural understanding and global career opportunities. How does multilingualism broaden one's perspective in an interconnected world?",
+                        'context' => "Analyze cross-cultural communication benefits and professional advantages.",
+                        'example' => "Mastering a global language like English opens doors to international scholarships and cross-border careers. Beyond employment, bilingualism encourages learners to appreciate diverse cultural viewpoints with empathy and openness. It bridges differences and fosters collaborative global problem solving."
+                    ],
+                    [
+                        'prompt' => "Imagine you are designing an eco-friendly community park. What green features will you include? Who will benefit most from this park? How will local volunteers maintain it over time?",
+                        'context' => "Outline an innovative community proposal emphasizing sustainability and social inclusion.",
+                        'example' => "Our proposed eco-park will feature rainwater harvesting ponds, native flowering gardens, and solar-powered walking lamps. Elderly residents will enjoy shaded benches while children play in natural wooden playgrounds. Weekend volunteer workshops will ensure the garden beds remain thriving and free of plastic litter."
+                    ]
+                ];
+                $ws = $writingScenarios[$i % count($writingScenarios)];
+                [$minW, $maxW] = match($level) {
+                    'basic' => [15, 50],
+                    'advanced' => [80, 200],
+                    default => [35, 100],
+                };
+
                 $base += [
-                    'prompt' => $prompt,
-                    'context' => $context,
-                    'min_words' => $min,
-                    'max_words' => $max,
+                    'prompt' => $ws['prompt'],
+                    'context' => $ws['context'],
+                    'min_words' => $minW,
+                    'max_words' => $maxW,
                     'rubric' => ['task_completion', 'relevance', 'grammar', 'vocabulary', 'organization', 'coherence', 'mechanics'],
-                    'example_answer' => $example
+                    'example_answer' => $ws['example']
                 ];
             }
             $items[]=$base;
@@ -328,13 +326,13 @@ final class LearningContentGenerator
     /** Extract a human-readable topic label from the RPP text. */
     private function extractTopicLabel(string $text): string
     {
-        if(preg_match('/Chapter\s*\/\s*Topik(?:\s*Chapter\s*\/\s*Topik)?\s+(.{5,200})/ui',$text,$m)){
+        if(preg_match('/Chapter\s*\/\s*Topik(?:\s*Chapter\s*\/\s*Topik)?\s+([A-Za-z0-9\s,-]{5,200})/ui',$text,$m)){
             $c=trim(preg_replace('/\s+/',' ',$m[1])??'');
-            $len=mb_strlen($c);
-            for($s=(int)ceil($len/3);$s<=(int)ceil($len*2/3);$s++){$h=mb_substr($c,0,$s);if(mb_strpos($c,$h,1)!==false){$c=trim($h);break;}}
-            if(mb_strlen($c)>=5)return mb_substr($c,0,80);
+            if(!preg_match('/(pembelajaran|kegiatan|alokasi|waktu|modul|ajar|kurikulum)/i',$c)&&mb_strlen($c)>=5){
+                return mb_substr($c,0,80);
+            }
         }
-        return 'Indonesian Endemic Animals';
+        return 'Endemic Wildlife and Environmental Conservation';
     }
     private function passage(string $text,string $level,int $index): string{$words=preg_split('/\s+/u',$text,-1,PREG_SPLIT_NO_EMPTY)?:[];$target=(int)Level::profile($level)['length'];if(!$words)return 'English learning develops communication through meaningful context.';$start=($index*13)%count($words);$rotated=array_merge(array_slice($words,$start),array_slice($words,0,$start));return implode(' ',array_slice(array_merge($rotated,$rotated,$rotated),0,$target));}
     private function instruction(string $skill,string $level): string{return match($skill){'reading'=>"Read the {$level} passage and choose the best answer.",'listening'=>"Play the Generated Listening Audio and answer before unlocking the transcript.",'speaking'=>'Read the following sentence aloud with clear pronunciation.','writing'=>"Write a {$level} response within the word-count limit."};}
@@ -343,6 +341,11 @@ final class LearningContentGenerator
     {
         foreach(['title','instruction','competency','source_excerpt'] as $field)if(!isset($item[$field])||!is_string($item[$field])||trim($item[$field])==='')throw new \RuntimeException('Activity schema invalid.');
         
+        $jsonEncoded = json_encode($item, JSON_UNESCAPED_UNICODE);
+        if (preg_match('/\b(adalah|yang|dan|di|dari|pada|untuk|dengan|sebagai|serta|atau|dalam|ini|itu|ke|oleh|karena|tidak|bisa|dapat|membantu|mempelajari|pembelajaran|menganalisis|membandingkan|penggunaan|kemampuan|kebanggaan|membuat|menggunakan|pengetahuan|menumbuhkan|persamaan|perbedaan|satwa|endemik|tujuan|peserta|didik|siswa|guru|kegiatan|pendahuluan|penutup|materi|langkah|asesmen|soal|jawaban|pilihan|teks)\b/iu', $jsonEncoded)) {
+            throw new \RuntimeException('Activity contains Indonesian words; 100% English required.');
+        }
+
         if (in_array($skill, ['reading', 'listening'], true) && isset($item['options']) && is_array($item['options']) && count($item['options']) === 4 && isset($item['answer'])) {
             $correctText = '';
             $ansIndex = ord($item['answer']) - 65; // A=0, B=1, C=2, D=3

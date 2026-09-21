@@ -73,7 +73,7 @@ final class GeminiLiveQuizGenerator
     private function readingPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         return <<<PROMPT
-You are an English quiz generator for Indonesian junior/senior high school students.
+You are an English quiz generator for high school students.
 Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} reading comprehension multiple-choice questions.
 
 LESSON PLAN EXCERPT:
@@ -81,7 +81,8 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
-- For each item, write a SHORT passage (3–5 sentences) about a SPECIFIC topic, animal, person, or event mentioned in the RPP.
+- CRITICAL LANGUAGE RULE: All output (passages, questions, options, explanations) MUST BE 100% IN PROPER ENGLISH. Even if the lesson excerpt contains Indonesian text, NEVER output any Indonesian words. Translate all concepts into natural English.
+- For each item, write a SHORT passage (3–5 sentences) in English about a SPECIFIC topic, animal, person, or event mentioned in the RPP.
 - The question must ask about a SPECIFIC DETAIL from the passage:
   * A name (of a bird, person, character, place)
   * A fact (what the animal eats, where it lives, what it looks like)
@@ -108,7 +109,7 @@ PROMPT;
     private function listeningPrompt(int $startN, int $count, string $difficulty, string $excerpt): string
     {
         return <<<PROMPT
-You are an English listening quiz generator for Indonesian junior/senior high school students.
+You are an English listening quiz generator for high school students.
 Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} listening multiple-choice questions.
 
 LESSON PLAN EXCERPT:
@@ -116,7 +117,8 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
-- For each item, write a SHORT audio script (3–5 sentences): a dialogue or monologue featuring SPECIFIC names, places, or animals from the RPP.
+- CRITICAL LANGUAGE RULE: All output (script, question, options, explanation) MUST BE 100% IN PROPER ENGLISH. Even if the lesson excerpt contains Indonesian text, NEVER output any Indonesian words. Translate all concepts into natural English.
+- For each item, write a SHORT audio script (3–5 sentences) in English: a dialogue or monologue featuring SPECIFIC names, places, or animals from the RPP.
 - The question must ask about a SPECIFIC DETAIL from the audio:
   * Who said something / who did something
   * Where a character went or what they saw
@@ -128,7 +130,7 @@ STRICT REQUIREMENTS:
 Respond ONLY with a valid JSON array, no markdown fences:
 [
   {
-    "script": "3–5 sentence audio script with specific names/facts from the RPP",
+    "script": "3–5 sentence English audio script with specific names/facts from the RPP",
     "language": "en-US",
     "rate": 0.95,
     "question": "specific detail question about who/what/where in the audio",
@@ -150,7 +152,7 @@ PROMPT;
         $duration = str_contains($difficulty, 'hard') ? 90 : 60;
 
         return <<<PROMPT
-You are an English speaking task generator for Indonesian junior/senior high school students.
+You are an English speaking task generator for high school students.
 Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} speaking tasks.
 
 LESSON PLAN EXCERPT:
@@ -158,6 +160,7 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
+- CRITICAL LANGUAGE RULE: All output (prompt, scenario, keywords) MUST BE 100% IN PROPER ENGLISH. Even if the lesson excerpt contains Indonesian text, NEVER output any Indonesian words.
 - The prompt MUST be a specific English sentence of 8-15 words based on the RPP lesson content for the student to read aloud. Do NOT make it a question.
 - Return a JSON array of objects only.
 
@@ -183,7 +186,7 @@ PROMPT;
         };
 
         return <<<PROMPT
-You are an English writing task generator for Indonesian junior/senior high school students.
+You are an English writing task generator for high school students.
 Study the lesson plan (RPP) excerpt carefully, then generate exactly {$count} writing tasks.
 
 LESSON PLAN EXCERPT:
@@ -191,7 +194,8 @@ LESSON PLAN EXCERPT:
 
 STRICT REQUIREMENTS:
 - Total items to generate: {$count}. Start numbering sequence from item index {$startN}.
-- The prompt MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** (soal cerita) based on the RPP lesson material.
+- CRITICAL LANGUAGE RULE: All output (prompt, context) MUST BE 100% IN PROPER ENGLISH. Even if the lesson excerpt contains Indonesian text, NEVER output any Indonesian words.
+- The prompt MUST be framed either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or a **story-based / narrative scenario** in English based on the RPP lesson material.
 - E.g. "Imagine you are Galang going birdwatching in Papua. Write a story about: (1) Who did you go with? (2) What bird did you see? ...", or "Answer these 5W+1H questions to write a descriptive paragraph...".
 - Word limit: {$minW}–{$maxW} words.
 - Return a JSON array of objects only.
@@ -199,8 +203,8 @@ STRICT REQUIREMENTS:
 Respond ONLY with a valid JSON array, no markdown fences:
 [
   {
-    "prompt": "story-based prompt or a structured 5W+1H question prompt based on the RPP content",
-    "context": "brief instruction or scenario setting for the student",
+    "prompt": "story-based English prompt or a structured 5W+1H question prompt based on the RPP content",
+    "context": "brief English instruction or scenario setting for the student",
     "minimum_words": {$minW},
     "maximum_words": {$maxW}
   }
