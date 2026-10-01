@@ -11,7 +11,7 @@ final class AssessmentService
     {
         if(!in_array($skill,['speaking','writing'],true))throw new \InvalidArgumentException('Assessment skill tidak valid.');
         $content=json_decode((string)$activity['content_json'],true);if(!is_array($content))throw new \RuntimeException('Activity content invalid.');
-        if($skill==='speaking'&&($activity['level']??'')==='basic')return $this->basicReadAloud($submission,$content,(int)($activity['response_duration_ms']??0))+['source'=>'objective'];
+        if($skill==='speaking')return $this->basicReadAloud($submission,$content,(int)($activity['response_duration_ms']??0))+['source'=>'objective'];
         $source='fallback';try{$result=$this->fromAi($skill,$submission,$content,['level'=>(string)($activity['level']??''),'lesson_context'=>mb_substr((string)($activity['source_excerpt']??''),0,3000)]);$source='ai';}catch(\Throwable $e){$result=$this->fallback($skill,$submission,$content);app_log('warning','Learning assessment fallback used',['activity_id'=>(int)$activity['id'],'skill'=>$skill,'reason'=>get_class($e)]);}
         return $this->validate($result)+['source'=>$source];
     }

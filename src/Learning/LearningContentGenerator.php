@@ -59,7 +59,7 @@ final class LearningContentGenerator
                 ."IMPORTANT CONTENT RULES:\n"
                 ."- Base activities on English learning concepts: narrative details, characters, settings, fauna, conservation, grammar points, or vocabulary.\n"
                 ."- For Writing: 'prompt' MUST be framed in English either as a **5W + 1H question series** (Who, What, Where, When, Why, How) or as a **narrative scenario / contextual writing prompt** based on the lesson themes. Do NOT make it a generic dry prompt.\n"
-                ."- For Speaking: 'prompt' MUST be a specific English sentence of 8-15 words based on the lesson themes for the student to read aloud. Do NOT make it a question. The instruction must always be 'Read the following sentence aloud with clear pronunciation.'. 'example_response' must be the exact same sentence.\n"
+                ."- For Speaking: 'prompt' MUST be a specific English sentence based on the lesson themes for the student to shadow aloud. Do NOT make it a question. For Basic: 8-12 words. For Intermediate: 12-18 words. For Advanced: 16-24 words. The instruction must always be 'Listen to the native model audio and shadow the sentence aloud with clear pronunciation.'. 'example_response' must be the exact same sentence.\n"
                 ."- For Listening: 'script' must be a natural 3-5 sentence English dialogue or monologue about a specific topic from the lesson.\n"
                 ."- For Reading: 'passage' must be a coherent English paragraph of appropriate length.\n"
                 ."- Questions must reference specific names, facts, places, or vocabulary from the English material.\n"
@@ -211,32 +211,44 @@ final class LearningContentGenerator
                 ];
             }
             elseif($skill==='speaking'){
-                $speakingSentences = [
-                    "Tropical rainforests provide shelter for hundreds of unique plant and animal species.",
-                    "The brave traveler followed the mountain trail until he discovered clean freshwater.",
+                $speakingBasic = [
+                    "Tropical rainforests provide shelter for hundreds of unique animal species.",
+                    "The brave traveler followed the mountain trail until he found clean water.",
                     "Community members cooperated enthusiastically to restore the historic wooden bridge.",
                     "Protecting mangrove forests protects coastal villages from dangerous storm surges.",
-                    "Traditional folklore reminds communities about the importance of kindness and mutual respect.",
-                    "Endemic wildlife plays an essential role in dispersing seeds across the rainforest canopy.",
-                    "Active listening and regular practice build authentic confidence in spoken English communication.",
-                    "Solar panels generate clean electrical power without releasing hazardous greenhouse gases into the air.",
-                    "Careful planning and consistent daily effort allow students to achieve meaningful educational goals.",
-                    "Conserving natural resources safeguards the delicate ecological balance for future generations.",
-                    "Scientific researchers observe migratory birds to track global environmental weather patterns.",
-                    "Clear pronunciation and steady pacing make public presentations engaging and persuasive.",
-                    "Local farmers cultivate organic vegetables using natural compost to nurture the fertile soil.",
-                    "Reading English stories every afternoon expands vocabulary and strengthens creative imagination.",
-                    "Youth volunteers planted fifty flowering shrubs around the town square last weekend."
+                    "Traditional folklore reminds communities about the importance of kindness and respect.",
+                    "Endemic wildlife plays an essential role in dispersing seeds across the forest.",
+                    "Active listening and regular practice build authentic confidence in spoken English.",
+                    "Solar panels generate clean electrical power without releasing hazardous greenhouse gases.",
+                    "Careful planning and consistent daily effort allow students to achieve meaningful goals.",
+                    "Conserving natural resources safeguards the delicate ecological balance for the future.",
+                    "Scientific researchers observe migratory birds to track global environmental patterns.",
+                    "Clear pronunciation and steady pacing make public presentations engaging and persuasive."
                 ];
-                $prompt = $speakingSentences[$i % count($speakingSentences)];
-                $scenario = "Read the English sentence aloud with clear pronunciation, proper stress, and natural pacing.";
+                $speakingIntermediate = [
+                    "Tropical rainforest ecosystems support an astonishing variety of flora and fauna across diverse habitats.",
+                    "When communities collaborate on local conservation initiatives, they protect endangered wildlife and secure freshwater reserves.",
+                    "Practicing English shadowing every day helps language learners develop natural rhythm, accurate word stress, and conversational fluency.",
+                    "Mangrove wetlands along tropical coastlines serve as critical natural buffers against intense tidal surges and ocean storms.",
+                    "Traditional folk narratives preserve profound historical wisdom regarding environmental stewardship, personal integrity, and community cooperation.",
+                    "By studying biodiversity in protected national parks, student researchers gain practical insight into ecological balance and wildlife conservation."
+                ];
+                $speakingAdvanced = [
+                    "Conserving fragile tropical ecosystems requires coordinated international policies, persistent community engagement, and scientific research into sustainable resource management.",
+                    "Mastering advanced spoken English fluency demands continuous shadowing practice, focused attention to connected speech, and confident articulation in professional dialogues.",
+                    "Sustainable agricultural development balances immediate economic productivity with long-term ecological preservation, ensuring fertile soils and pure water tables for future generations.",
+                    "Empirical scientific investigations demonstrate that preserving endemic fauna is fundamental to maintaining cross-canopy pollination cycles and overall biodiversity stability."
+                ];
+                $pool = $level === 'basic' ? $speakingBasic : ($level === 'advanced' ? $speakingAdvanced : $speakingIntermediate);
+                $prompt = $pool[$i % count($pool)];
+                $scenario = "Listen to the native model audio and shadow the English sentence aloud with clear pronunciation, proper stress, and natural rhythm.";
 
                 $base += [
                     'scenario' => $scenario,
                     'prompt' => $prompt,
                     'example_response' => $prompt,
                     'keywords' => array_slice($words, ($i * 2) % count($words), 3),
-                    'min_words' => $level === 'basic' ? 8 : ($level === 'advanced' ? 14 : 10),
+                    'min_words' => $level === 'basic' ? 8 : ($level === 'advanced' ? 16 : 12),
                     'rubric' => ['response_relevance', 'task_completion', 'grammar', 'vocabulary', 'completeness', 'transcription_clarity']
                 ];
             }

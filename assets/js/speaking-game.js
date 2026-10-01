@@ -196,8 +196,8 @@ async function api(action,values={}){const f=new FormData();f.append("csrf_token
 function shell(){
   const t=state.task,w=node("div","","speaking-task"),h=node("header","","speaking-header"),meta=node("div","","task-meta"),timer=node("div","25","record-timer"),bar=node("div","","speaking-progress progress-track"),fill=node("div","","progress-fill");
   activeTimerElement=timer;
-  const isBasic=state.level==="basic";
-  const badgeText=isBasic?"🎙️ Shadowing Practice":state.level==="intermediate"?"Guided Response":"Spontaneous Response";
+  const lvlName=state.level?state.level.charAt(0).toUpperCase()+state.level.slice(1):"Basic";
+  const badgeText=`🎙️ Shadowing Practice · ${lvlName}`;
   meta.append(node("span",badgeText,"badge available"),node("span",`Task ${state.position+1} of 10`,"task-counter"));
   h.append(meta,timer);
   fill.style.width=`${state.position*10}%`;
@@ -206,8 +206,8 @@ function shell(){
 
   const prompt=node("section","","speaking-prompt");
 
-  // Shadowing Coach Panel for Basic / Shadowing
-  if(isBasic&&t.prompt){
+  // Shadowing Coach Panel for all Speaking levels
+  if(t.prompt){
     const coach=node("div","","shadow-coach-panel");
     const coachHeader=node("div","","shadow-coach-header");
     coachHeader.append(node("span","🎙️ Native Audio Model","shadow-badge"),node("span","💡 Click any word to hear pronunciation • Listen & shadow aloud","shadow-tip"));
@@ -311,9 +311,8 @@ style.textContent="@keyframes pulse {0%{transform:scale(0.95);box-shadow:0 0 0 0
 document.head.appendChild(style);
 
 async function task(){
-  const isBasic=state.level==="basic";
-  const recordLabel=isBasic?"🗣️ Start Shadowing":"🗣️ Start Speaking";
-  const initialStatus=isBasic?"Click 'Start Shadowing' to record your voice shadowing the sentence above.":"Click 'Start Speaking' to record your response.";
+  const recordLabel="🗣️ Start Shadowing";
+  const initialStatus="Click 'Start Shadowing' to record your voice shadowing the sentence above.";
   const{w,timer}=shell(),controls=node("div","","record-controls"),record=node("button",recordLabel,"button gold"),stop=node("button","Stop & Evaluate","button secondary"),status=node("p",initialStatus,"record-status"),liveBox=node("div","","live-transcript-box");
   liveBox.style.display="none";
   liveBox.style.marginTop="20px";
@@ -403,7 +402,7 @@ function countdown(timer,record,status){
 async function startRecording(record,stop,status,liveBox){
   if(recording||state.attempt_used||Date.now()>=deadline)return;
   record.disabled=true;
-  if(shadowSimultaneous&&state.level==="basic"&&state.task?.prompt){
+  if(shadowSimultaneous&&state.task?.prompt){
     playNativeAudio(state.task.prompt,currentPlayBtn,currentWave);
   }else{
     stopShadowAudio();
@@ -487,7 +486,7 @@ async function startRecording(record,stop,status,liveBox){
       if(liveDisplay){
         liveDisplay.textContent=full||"Listening to your voice... Speak clearly into your mic.";
       }
-      if(state.level==="basic"&&shadowWordElements.length&&full){
+      if(shadowWordElements.length&&full){
         const spokenTokens=full.toLowerCase().replace(/[^a-z0-9\s]/g,"").split(/\s+/).filter(Boolean);
         const spokenSet=new Set(spokenTokens);
         shadowWordElements.forEach(el=>{
@@ -603,7 +602,7 @@ async function startRecording(record,stop,status,liveBox){
     recorder.start(250);
     launchRecognitionSession();
     stop.disabled=false;
-    status.textContent=state.level==="basic"?"Recording... Shadow the sentence above with clear pronunciation.":"Recording... Deliver your response in English clearly.";
+    status.textContent="Recording... Shadow the sentence above with clear pronunciation.";
     state.attempt_used=true;
     api("recording_start").then(d=>{
       if(d&&d.state){
